@@ -192,12 +192,10 @@ const toggleTool = (name, selected) => {
   selections[name].selected = selected;
 };
 
-const selectAllReadTools = selected => {
-  liveTools.value
-    .filter(tool => tool.read_only)
-    .forEach(tool => {
-      selections[tool.name].selected = selected;
-    });
+const selectAllTools = selected => {
+  liveTools.value.forEach(tool => {
+    selections[tool.name].selected = selected;
+  });
 };
 
 // The main action names what happens next
@@ -254,7 +252,7 @@ defineExpose({ open });
         :load-failed="toolsLoadFailed"
         :is-busy="isBusy"
         @toggle="toggleTool"
-        @select-all="selectAllReadTools"
+        @select-all="selectAllTools"
         @approve="approveChange"
       />
 
