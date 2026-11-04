@@ -10,6 +10,7 @@ import {
 } from 'dashboard/helper/portalHelper';
 import { useStore, useMapGetter } from 'dashboard/composables/store';
 import { rendersIdentically } from 'dashboard/helper/articleDiffHelper';
+import articlesAPI from 'dashboard/api/helpCenter/articles';
 
 import ArticleEditor from 'dashboard/components-next/HelpCenter/Pages/ArticleEditorPage/ArticleEditor.vue';
 
@@ -30,21 +31,19 @@ const portal = computed(() => portalBySlug.value(portalSlug));
 
 const isUpdating = ref(false);
 const isSaved = ref(false);
+const isLoadingPreview = ref(false);
 
 const articleLink = computed(() => {
   const { slug: categorySlug, locale: categoryLocale } = article.value.category;
-  const { slug: articleSlugValue, status, previewToken } = article.value;
+  const { slug: articleSlugValue } = article.value;
   const portalCustomDomain = portal.value?.custom_domain;
-  const publicUrl = buildPortalArticleURL(
+  return buildPortalArticleURL(
     portalSlug,
     categorySlug,
     categoryLocale,
     articleSlugValue,
     portalCustomDomain
   );
-  if (status === ARTICLE_STATUSES.PUBLISHED) return publicUrl;
-
-  return `${publicUrl}?preview=${encodeURIComponent(previewToken)}`;
 });
 
 // On a published article, title/content edits stage into draft_* columns (kept
@@ -147,11 +146,30 @@ const fetchArticleDetails = () => {
   });
 };
 
-const previewArticle = () => {
-  window.open(articleLink.value, '_blank');
+const previewArticle = async () => {
   useTrack(PORTALS_EVENTS.PREVIEW_ARTICLE, {
     status: article.value?.status,
   });
+  if (article.value.status === ARTICLE_STATUSES.PUBLISHED) {
+    window.open(articleLink.value, '_blank');
+    return;
+  }
+
+  isLoadingPreview.value = true;
+  try {
+    const { data } = await articlesAPI.getPreviewToken({
+      id: article.value.id,
+      portalSlug,
+    });
+    window.open(
+      `${articleLink.value}?preview=${encodeURIComponent(data.preview_token)}`,
+      '_blank'
+    );
+  } catch {
+    useAlert(t('HELP_CENTER.EDIT_ARTICLE_PAGE.HEADER.PREVIEW_ERROR'));
+  } finally {
+    isLoadingPreview.value = false;
+  }
 };
 
 onMounted(fetchArticleDetails);
@@ -162,6 +180,7 @@ onMounted(fetchArticleDetails);
     :article="article"
     :is-updating="isUpdating"
     :is-saved="isSaved"
+    :is-loading-preview="isLoadingPreview"
     @save-article="saveArticle"
     @preview-article="previewArticle"
     @go-back="goBackToArticles"
