@@ -33,15 +33,18 @@ const isSaved = ref(false);
 
 const articleLink = computed(() => {
   const { slug: categorySlug, locale: categoryLocale } = article.value.category;
-  const { slug: articleSlugValue } = article.value;
+  const { slug: articleSlugValue, status, previewToken } = article.value;
   const portalCustomDomain = portal.value?.custom_domain;
-  return buildPortalArticleURL(
+  const publicUrl = buildPortalArticleURL(
     portalSlug,
     categorySlug,
     categoryLocale,
     articleSlugValue,
     portalCustomDomain
   );
+  if (status === ARTICLE_STATUSES.PUBLISHED) return publicUrl;
+
+  return `${publicUrl}?preview=${encodeURIComponent(previewToken)}`;
 });
 
 // On a published article, title/content edits stage into draft_* columns (kept
