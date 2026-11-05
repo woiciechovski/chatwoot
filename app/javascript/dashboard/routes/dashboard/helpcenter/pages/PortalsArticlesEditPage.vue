@@ -32,22 +32,18 @@ const portal = computed(() => portalBySlug.value(portalSlug.value));
 
 const isUpdating = ref(false);
 const isSaved = ref(false);
-const previewToken = ref('');
 
 const articleLink = computed(() => {
   const { slug: categorySlug, locale: categoryLocale } = article.value.category;
-  const { slug: articleSlugValue, status } = article.value;
+  const { slug: articleSlugValue } = article.value;
   const portalCustomDomain = portal.value?.custom_domain;
-  const publicUrl = buildPortalArticleURL(
+  return buildPortalArticleURL(
     portalSlug.value,
     categorySlug,
     categoryLocale,
     articleSlugValue,
     portalCustomDomain
   );
-  if (status === ARTICLE_STATUSES.PUBLISHED) return publicUrl;
-
-  return `${publicUrl}?preview=${encodeURIComponent(previewToken.value)}`;
 });
 
 // On a published article, title/content edits stage into draft_* columns (kept
@@ -150,41 +146,39 @@ const fetchArticleDetails = () => {
   });
 };
 
-const fetchPreviewToken = async () => {
+const previewArticle = async () => {
   const id = articleSlug.value;
   const portalId = portalSlug.value;
-  const { data } = await articlesAPI.getPreviewToken({
-    id,
-    portalSlug: portalId,
-  });
-  if (id === articleSlug.value && portalId === portalSlug.value) {
-    previewToken.value = data.preview_token;
-  }
-};
+  const status = article.value.status;
+  const previewUrl = new URL(articleLink.value);
 
-const previewArticle = () => {
-  const isPublished = article.value.status === ARTICLE_STATUSES.PUBLISHED;
-  if (!isPublished && !previewToken.value) {
-    useAlert(t('HELP_CENTER.EDIT_ARTICLE_PAGE.HEADER.PREVIEW_NOT_READY'));
-    fetchPreviewToken();
+  // Open during the click so a slow token request cannot trigger popup blocking.
+  const previewTab = window.open('about:blank', '_blank');
+  if (!previewTab) {
+    useAlert(t('HELP_CENTER.EDIT_ARTICLE_PAGE.HEADER.PREVIEW_POPUP_BLOCKED'));
     return;
   }
 
-  window.open(articleLink.value, '_blank');
-  useTrack(PORTALS_EVENTS.PREVIEW_ARTICLE, {
-    status: article.value?.status,
-  });
+  previewTab.opener = null;
+
+  try {
+    if (status !== ARTICLE_STATUSES.PUBLISHED) {
+      const { data } = await articlesAPI.getPreviewToken({
+        id,
+        portalSlug: portalId,
+      });
+      previewUrl.searchParams.set('preview', data.preview_token);
+    }
+
+    previewTab.location.replace(previewUrl.toString());
+    useTrack(PORTALS_EVENTS.PREVIEW_ARTICLE, { status });
+  } catch {
+    previewTab.close();
+    useAlert(t('HELP_CENTER.EDIT_ARTICLE_PAGE.HEADER.PREVIEW_ERROR'));
+  }
 };
 
-watch(
-  [articleSlug, portalSlug],
-  () => {
-    previewToken.value = '';
-    fetchArticleDetails();
-    fetchPreviewToken();
-  },
-  { immediate: true }
-);
+watch([articleSlug, portalSlug], fetchArticleDetails, { immediate: true });
 </script>
 
 <template>
