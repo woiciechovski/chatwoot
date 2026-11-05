@@ -128,7 +128,10 @@ const statusText = computed(() =>
 
 const onClickGoBack = () => emit('goBack');
 
-const previewArticle = () => emit('previewArticle');
+const previewArticle = () => {
+  if (blockedWhileBusy()) return;
+  emit('previewArticle');
+};
 
 const getStatusMessage = (status, isSuccess) => {
   const messageType = isSuccess ? 'SUCCESS' : 'ERROR';
