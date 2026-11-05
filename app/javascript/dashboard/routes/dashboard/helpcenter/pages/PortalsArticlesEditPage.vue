@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { useAlert, useTrack } from 'dashboard/composables';
@@ -19,15 +19,16 @@ const router = useRouter();
 const store = useStore();
 const { t } = useI18n();
 
-const { articleSlug, portalSlug } = route.params;
+const articleSlug = computed(() => route.params.articleSlug);
+const portalSlug = computed(() => route.params.portalSlug);
 
 const articleById = useMapGetter('articles/articleById');
 
-const article = computed(() => articleById.value(articleSlug));
+const article = computed(() => articleById.value(articleSlug.value));
 
 const portalBySlug = useMapGetter('portals/portalBySlug');
 
-const portal = computed(() => portalBySlug.value(portalSlug));
+const portal = computed(() => portalBySlug.value(portalSlug.value));
 
 const isUpdating = ref(false);
 const isSaved = ref(false);
@@ -38,7 +39,7 @@ const articleLink = computed(() => {
   const { slug: articleSlugValue, status } = article.value;
   const portalCustomDomain = portal.value?.custom_domain;
   const publicUrl = buildPortalArticleURL(
-    portalSlug,
+    portalSlug.value,
     categorySlug,
     categoryLocale,
     articleSlugValue,
@@ -100,8 +101,8 @@ const saveArticle = async ({ ...values }) => {
   isUpdating.value = true;
   try {
     await store.dispatch('articles/update', {
-      portalSlug,
-      articleId: articleSlug,
+      portalSlug: portalSlug.value,
+      articleId: articleSlug.value,
       ...stageDraftFields(values),
     });
     isSaved.value = true;
@@ -144,17 +145,21 @@ const goBackToArticles = () => {
 
 const fetchArticleDetails = () => {
   store.dispatch('articles/show', {
-    id: articleSlug,
-    portalSlug,
+    id: articleSlug.value,
+    portalSlug: portalSlug.value,
   });
 };
 
 const fetchPreviewToken = async () => {
+  const id = articleSlug.value;
+  const portalId = portalSlug.value;
   const { data } = await articlesAPI.getPreviewToken({
-    id: articleSlug,
-    portalSlug,
+    id,
+    portalSlug: portalId,
   });
-  previewToken.value = data.preview_token;
+  if (id === articleSlug.value && portalId === portalSlug.value) {
+    previewToken.value = data.preview_token;
+  }
 };
 
 const previewArticle = () => {
@@ -171,8 +176,15 @@ const previewArticle = () => {
   });
 };
 
-onMounted(fetchArticleDetails);
-onMounted(fetchPreviewToken);
+watch(
+  [articleSlug, portalSlug],
+  () => {
+    previewToken.value = '';
+    fetchArticleDetails();
+    fetchPreviewToken();
+  },
+  { immediate: true }
+);
 </script>
 
 <template>
