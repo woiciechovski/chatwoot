@@ -31,19 +31,22 @@ const portal = computed(() => portalBySlug.value(portalSlug));
 
 const isUpdating = ref(false);
 const isSaved = ref(false);
-const isLoadingPreview = ref(false);
+const previewToken = ref('');
 
 const articleLink = computed(() => {
   const { slug: categorySlug, locale: categoryLocale } = article.value.category;
-  const { slug: articleSlugValue } = article.value;
+  const { slug: articleSlugValue, status } = article.value;
   const portalCustomDomain = portal.value?.custom_domain;
-  return buildPortalArticleURL(
+  const publicUrl = buildPortalArticleURL(
     portalSlug,
     categorySlug,
     categoryLocale,
     articleSlugValue,
     portalCustomDomain
   );
+  if (status === ARTICLE_STATUSES.PUBLISHED) return publicUrl;
+
+  return `${publicUrl}?preview=${encodeURIComponent(previewToken.value)}`;
 });
 
 // On a published article, title/content edits stage into draft_* columns (kept
@@ -146,36 +149,23 @@ const fetchArticleDetails = () => {
   });
 };
 
-const previewArticle = async () => {
+const fetchPreviewToken = async () => {
+  const { data } = await articlesAPI.getPreviewToken({
+    id: articleSlug,
+    portalSlug,
+  });
+  previewToken.value = data.preview_token;
+};
+
+const previewArticle = () => {
+  window.open(articleLink.value, '_blank');
   useTrack(PORTALS_EVENTS.PREVIEW_ARTICLE, {
     status: article.value?.status,
   });
-  if (article.value.status === ARTICLE_STATUSES.PUBLISHED) {
-    window.open(articleLink.value, '_blank');
-    return;
-  }
-
-  isLoadingPreview.value = true;
-  try {
-    const { data } = await articlesAPI.getPreviewToken({
-      id: article.value.id,
-      portalSlug,
-    });
-    const previewWindow = window.open(
-      `${articleLink.value}?preview=${encodeURIComponent(data.preview_token)}`,
-      '_blank'
-    );
-    if (!previewWindow) {
-      useAlert(t('HELP_CENTER.EDIT_ARTICLE_PAGE.HEADER.PREVIEW_ERROR'));
-    }
-  } catch {
-    useAlert(t('HELP_CENTER.EDIT_ARTICLE_PAGE.HEADER.PREVIEW_ERROR'));
-  } finally {
-    isLoadingPreview.value = false;
-  }
 };
 
 onMounted(fetchArticleDetails);
+onMounted(fetchPreviewToken);
 </script>
 
 <template>
@@ -183,7 +173,6 @@ onMounted(fetchArticleDetails);
     :article="article"
     :is-updating="isUpdating"
     :is-saved="isSaved"
-    :is-loading-preview="isLoadingPreview"
     @save-article="saveArticle"
     @preview-article="previewArticle"
     @go-back="goBackToArticles"
