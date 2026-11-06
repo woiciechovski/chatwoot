@@ -13,6 +13,7 @@ import { useSidebarKeyboardShortcuts } from './useSidebarKeyboardShortcuts';
 import { vOnClickOutside } from '@vueuse/components';
 import { FEATURE_FLAGS } from 'dashboard/featureFlags';
 import { useWindowSize, useEventListener } from '@vueuse/core';
+import { isVoiceCallEnabled } from 'dashboard/helper/inbox';
 
 import Button from 'dashboard/components-next/button/Button.vue';
 import SidebarGroup from './SidebarGroup.vue';
@@ -50,11 +51,6 @@ const { accountScopedRoute, isOnChatwootCloud } = useAccount();
 const { isEnterprise } = useConfig();
 const store = useStore();
 
-// Calls run on the enterprise-only API (cloud runs enterprise); hide the entry
-// on community so it doesn't lead to a dashboard/CTA the backend can't serve.
-const isCallsAvailable = computed(
-  () => isOnChatwootCloud.value || isEnterprise
-);
 const searchShortcut = useKbd([`$mod`, 'k']);
 const commandBar = useCommandBar();
 const { t } = useI18n();
@@ -235,6 +231,19 @@ useEventListener(document, 'touchmove', onResizeMove, { passive: false });
 useEventListener(document, 'touchend', onResizeEnd);
 
 const inboxes = useMapGetter('inboxes/getInboxes');
+// Calls require a supported platform, account voice access, and a voice inbox.
+const hasVoiceCallFeature = computed(() =>
+  isFeatureEnabledonAccount.value(accountId.value, FEATURE_FLAGS.CHANNEL_VOICE)
+);
+const hasVoiceCallInbox = computed(() =>
+  inboxes.value.some(isVoiceCallEnabled)
+);
+const isCallsAvailable = computed(
+  () =>
+    (isOnChatwootCloud.value || isEnterprise) &&
+    hasVoiceCallFeature.value &&
+    hasVoiceCallInbox.value
+);
 const labels = useMapGetter('labels/getLabelsOnSidebar');
 const allUnreadCount = useMapGetter(
   'conversationUnreadCounts/getAllUnreadCount'
