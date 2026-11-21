@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_11_21_030454) do
+ActiveRecord::Schema[7.2].define(version: 2026_11_21_180537) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -1433,6 +1433,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_21_030454) do
     t.string "business_name"
     t.jsonb "csat_config", default: {}, null: false
     t.bigint "conversation_flow_id"
+    t.string "agent_conversation_access", default: "all", null: false
     t.index ["account_id"], name: "index_inboxes_on_account_id"
     t.index ["channel_id", "channel_type"], name: "index_inboxes_on_channel_id_and_channel_type"
     t.index ["conversation_flow_id"], name: "index_inboxes_on_conversation_flow_id"

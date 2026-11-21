@@ -719,6 +719,26 @@ RSpec.describe 'Inboxes API', type: :request do
         expect(response.parsed_body['name']).to eq 'new test inbox'
       end
 
+      it 'updates and returns the agent conversation access mode' do
+        patch "/api/v1/accounts/#{account.id}/inboxes/#{inbox.id}",
+              headers: admin.create_new_auth_token,
+              params: { agent_conversation_access: 'assigned_participating_or_team' },
+              as: :json
+
+        expect(response).to have_http_status(:success)
+        expect(inbox.reload.agent_conversation_access).to eq('assigned_participating_or_team')
+        expect(response.parsed_body['agent_conversation_access']).to eq('assigned_participating_or_team')
+      end
+
+      it 'rejects an unknown agent conversation access mode' do
+        patch "/api/v1/accounts/#{account.id}/inboxes/#{inbox.id}",
+              headers: admin.create_new_auth_token,
+              params: { agent_conversation_access: 'unknown' },
+              as: :json
+
+        expect(response).to have_http_status(:unprocessable_entity)
+      end
+
       it 'updates api inbox when administrator' do
         api_channel = create(:channel_api, account: account)
         api_inbox = create(:inbox, channel: api_channel, account: account)

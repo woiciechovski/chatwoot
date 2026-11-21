@@ -9,6 +9,23 @@ RSpec.describe Inbox do
     it { is_expected.to validate_presence_of(:account_id) }
     it { is_expected.to validate_presence_of(:name) }
 
+    it 'defaults agent conversation access to all conversations' do
+      expect(create(:inbox).agent_conversation_access).to eq('all')
+    end
+
+    it 'accepts restricted agent conversation access' do
+      inbox = build(:inbox, account: create(:account), agent_conversation_access: 'assigned_participating_or_team')
+
+      expect(inbox).to be_valid
+    end
+
+    it 'rejects an unknown agent conversation access mode' do
+      inbox = build(:inbox, account: create(:account), agent_conversation_access: 'unknown')
+
+      expect(inbox).not_to be_valid
+      expect(inbox.errors[:agent_conversation_access]).to be_present
+    end
+
     it 'does not attach an inbox to a flow from another account' do
       inbox = create(:inbox)
       flow = create(:conversation_flow)

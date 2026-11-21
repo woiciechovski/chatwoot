@@ -41,6 +41,8 @@ const isLicensedSelfHosted = computed(
 
 const selectedAgentIds = ref([]);
 const isAgentListUpdating = ref(false);
+const restrictAgentConversationAccess = ref(false);
+const savedAgentConversationAccess = ref('all');
 const enableAutoAssignment = ref(false);
 const maxAssignmentLimit = ref(null);
 const assignmentPolicy = ref(null);
@@ -270,6 +272,26 @@ const handleToggleAutoAssignment = async val => {
   }
 };
 
+const handleToggleAgentConversationAccess = async val => {
+  restrictAgentConversationAccess.value = val;
+
+  try {
+    await store.dispatch('inboxes/updateInbox', {
+      id: props.inbox.id,
+      formData: false,
+      agent_conversation_access: val ? 'assigned_participating_or_team' : 'all',
+    });
+    savedAgentConversationAccess.value = val
+      ? 'assigned_participating_or_team'
+      : 'all';
+    useAlert(t('INBOX_MGMT.EDIT.API.SUCCESS_MESSAGE'));
+  } catch (error) {
+    restrictAgentConversationAccess.value =
+      savedAgentConversationAccess.value === 'assigned_participating_or_team';
+    useAlert(t('INBOX_MGMT.EDIT.API.ERROR_MESSAGE'));
+  }
+};
+
 const updateAgents = async () => {
   isAgentListUpdating.value = true;
   try {
@@ -360,6 +382,10 @@ const deleteAssignmentPolicy = async () => {
 };
 
 const setDefaults = () => {
+  savedAgentConversationAccess.value =
+    props.inbox.agent_conversation_access || 'all';
+  restrictAgentConversationAccess.value =
+    savedAgentConversationAccess.value === 'assigned_participating_or_team';
   enableAutoAssignment.value = props.inbox.enable_auto_assignment;
   maxAssignmentLimit.value =
     props.inbox.auto_assignment_config?.max_assignment_limit || null;
@@ -413,6 +439,20 @@ onMounted(() => {
         </div>
       </template>
     </SettingsFieldSection>
+    <SettingsAccordion
+      :title="$t('INBOX_MGMT.SETTINGS_POPUP.CONVERSATION_ACCESS.TITLE')"
+      class="mt-6"
+    >
+      <SettingsToggleSection
+        v-model="restrictAgentConversationAccess"
+        compact
+        :header="$t('INBOX_MGMT.SETTINGS_POPUP.CONVERSATION_ACCESS.HEADER')"
+        :description="
+          $t('INBOX_MGMT.SETTINGS_POPUP.CONVERSATION_ACCESS.DESCRIPTION')
+        "
+        @update:model-value="handleToggleAgentConversationAccess"
+      />
+    </SettingsAccordion>
     <SettingsAccordion
       :title="$t('INBOX_MGMT.SETTINGS_POPUP.AGENT_ASSIGNMENT')"
       class="mt-6"

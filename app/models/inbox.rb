@@ -48,6 +48,7 @@ class Inbox < ApplicationRecord
   include InboxBrandedEmailLayoutable
   include InboxBotStatus
   include ConversationFlowInbox
+  include InboxAgentConversationAccess
 
   # Not allowing characters:
   validates :name, presence: true
