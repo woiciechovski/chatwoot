@@ -69,6 +69,22 @@ RSpec.describe Conversations::UnreadCounts::Counter do
     )
   end
 
+  it 'uses per-agent counts when one of the assigned inboxes restricts conversation access' do
+    visible_inbox.update!(agent_conversation_access: 'assigned_participating_or_team')
+    create_unread_conversation(account: account, inbox: visible_inbox, assignee: agent)
+    create_unread_conversation(account: account, inbox: visible_inbox)
+
+    result = described_class.new(account: account, user: agent).perform
+
+    expect(result).to eq(
+      all_count: 1,
+      inboxes: { visible_inbox.id.to_s => 1 },
+      labels: {},
+      teams: {}
+    )
+    expect(store.base_ready?(account.id)).to be(false)
+  end
+
   it 'counts unread conversations across all account inboxes for admins' do
     create_unread_conversation(account: account, inbox: visible_inbox, labels: [label.title], team: visible_team)
     create_unread_conversation(account: account, inbox: hidden_inbox, labels: [label.title], team: visible_team)

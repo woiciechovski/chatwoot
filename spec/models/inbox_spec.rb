@@ -106,6 +106,15 @@ RSpec.describe Inbox do
         inbox.destroy!
       end.to change { store.conversation_version(account.id) }.by(1)
     end
+
+    it 'invalidates the member unread snapshot when conversation access changes' do
+      agent = create(:user, account: account, role: :agent)
+      create(:inbox_member, user: agent, inbox: inbox)
+
+      expect do
+        inbox.update!(agent_conversation_access: 'assigned_participating_or_team')
+      end.to change { store.built_in_filter_version(account_id: account.id, user_id: agent.id) }.by(1)
+    end
   end
 
   describe '#add_members' do

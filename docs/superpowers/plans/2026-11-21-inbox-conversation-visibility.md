@@ -91,11 +91,11 @@
 - Consumes: `Conversations::PermissionFilterService` and `Inbox#restricted_agent_conversation_access?`.
 - Produces: SQL-grouped unread inbox, label, and team counts from conversations visible to the current user; `Counter` uses it only when an agent belongs to at least one restricted inbox.
 
-- [ ] **Step 1: Write failing count tests** for team-assigned/participating conversations and hidden assignments, plus a mode-change test for per-user filtered-count invalidation.
-- [ ] **Step 2: Run the focused counter and Inbox specs.** Expected: current shared counts include conversations hidden by the restricted mode and mode changes do not bump the member's filtered count version.
-- [ ] **Step 3: Implement the scoped unread relation and grouped counts; branch to it for agents with restricted inboxes.** Keep admins and all-mode agents on existing cache behavior.
-- [ ] **Step 4: Capture inbox member IDs before a mode update and invalidate their filtered unread snapshots after commit.** Inbox membership changes continue using the existing `InboxMember` invalidator.
-- [ ] **Step 5: Run the focused count and Inbox specs.** Expected: counts match visible conversations and the member's snapshot version changes on mode updates.
+- [x] **Step 1: Write failing count tests** for team-assigned/participating conversations and hidden assignments, plus a mode-change test for per-user filtered-count invalidation.
+- [x] **Step 2: Run the focused counter and Inbox specs.** Expected: current shared counts include conversations hidden by the restricted mode and mode changes do not bump the member's filtered count version.
+- [x] **Step 3: Implement the scoped unread relation and grouped counts; branch to it for agents with restricted inboxes.** Keep admins and all-mode agents on existing cache behavior.
+- [x] **Step 4: Capture inbox member IDs before a mode update and invalidate their filtered unread snapshots after commit.** Inbox membership changes continue using the existing `InboxMember` invalidator.
+- [x] **Step 5: Run the focused count and Inbox specs.** Expected: counts match visible conversations and the member's snapshot version changes on mode updates.
 
 ### Task 4: Align notifications and realtime delivery
 

@@ -1,11 +1,12 @@
 class Conversations::PermissionFilterService
   attr_reader :conversations, :user, :account
 
-  def initialize(conversations, user, account, plan_hint_selective_filter: false)
+  def initialize(conversations, user, account, plan_hint_selective_filter: false, restricted_agent_inbox_access: nil)
     @conversations = conversations
     @user = user
     @account = account
     @plan_hint_selective_filter = plan_hint_selective_filter
+    @restricted_agent_inbox_access = restricted_agent_inbox_access
   end
 
   def perform
@@ -30,18 +31,27 @@ class Conversations::PermissionFilterService
 
   def restrict_agent_conversation_access(permitted_conversations)
     return permitted_conversations unless account_user&.agent?
+    return permitted_conversations unless restricted_agent_inbox_access?
 
     restricted_inbox_ids = user.inboxes.where(
       account_id: account.id,
       agent_conversation_access: 'assigned_participating_or_team'
     ).select(:id)
-    return permitted_conversations unless restricted_inbox_ids.exists?
 
     restricted_inbox_conversations = permitted_conversations.where(inbox_id: restricted_inbox_ids)
     permitted_conversations.where.not(inbox_id: restricted_inbox_ids)
                            .or(restricted_inbox_conversations.where(assignee_id: user.id))
                            .or(restricted_inbox_conversations.where(id: participant_conversation_ids))
                            .or(restricted_inbox_conversations.where(team_id: user_team_ids))
+  end
+
+  def restricted_agent_inbox_access?
+    return @restricted_agent_inbox_access unless @restricted_agent_inbox_access.nil?
+
+    user.inboxes.exists?(
+      account_id: account.id,
+      agent_conversation_access: 'assigned_participating_or_team'
+    )
   end
 
   def participant_conversation_ids
