@@ -47,4 +47,23 @@ RSpec.describe ActionCableBroadcastJob do
 
     described_class.perform_now([unrelated_agent.pubsub_token], 'notification.updated', event_data)
   end
+
+  it 'keeps a queued conversation broadcast admin-only if Flow Manager reserves it before delivery' do
+    flow = create(:conversation_flow, account: account, enabled: true)
+    ConversationFlowExecution.create!(
+      account: account,
+      conversation: conversation,
+      conversation_flow: flow,
+      status: :reserved,
+      reserved_at: Time.current
+    )
+    event_data = { account_id: account.id, conversation_id: conversation.display_id }
+
+    expect(ActionCable.server).to receive(:broadcast).with(admin.pubsub_token, anything)
+    expect(ActionCable.server).not_to receive(:broadcast).with(assigned_agent.pubsub_token, anything)
+    expect(ActionCable.server).not_to receive(:broadcast).with(unrelated_agent.pubsub_token, anything)
+    expect(ActionCable.server).to receive(:broadcast).with(contact_token, anything)
+
+    described_class.perform_now(tokens, 'message.created', event_data)
+  end
 end

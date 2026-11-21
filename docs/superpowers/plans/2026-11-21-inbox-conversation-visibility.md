@@ -127,7 +127,7 @@
 
 **Interfaces:** all interfaces above.
 
-- [ ] **Step 1: Run focused RSpec for all new/changed backend specs and RuboCop for changed Ruby files.** Expected: pass; report any environment limitation with its exact cause.
-- [ ] **Step 2: Run focused Vitest and ESLint for changed frontend files.** Expected: pass with no lint errors.
-- [ ] **Step 3: Review the full diff against the spec**, including API/direct-read parity, Enterprise overrides, notifications, realtime, unread counts, default behavior, and query scope.
-- [ ] **Step 4: Run `git diff --check` and confirm the main worktree contains only intended changes.** Expected: clean check and no unrelated edits.
+- [x] **Step 1: Run focused RSpec for all new/changed backend specs and RuboCop for changed Ruby files.** Expected: pass; report any environment limitation with its exact cause.
+- [x] **Step 2: Run focused Vitest and ESLint for changed frontend files.** Expected: pass with no lint errors.
+- [x] **Step 3: Review the full diff against the spec**, including API/direct-read parity, Enterprise overrides, notifications, realtime, unread counts, default behavior, and query scope.
+- [x] **Step 4: Run `git diff --check` and confirm the main worktree contains only intended changes.** Expected: clean check and no unrelated edits.

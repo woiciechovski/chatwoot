@@ -38,11 +38,34 @@ class Conversations::PermissionFilterService
       agent_conversation_access: 'assigned_participating_or_team'
     ).select(:id)
 
-    restricted_inbox_conversations = permitted_conversations.where(inbox_id: restricted_inbox_ids)
-    permitted_conversations.where.not(inbox_id: restricted_inbox_ids)
-                           .or(restricted_inbox_conversations.where(assignee_id: user.id))
-                           .or(restricted_inbox_conversations.where(id: participant_conversation_ids))
-                           .or(restricted_inbox_conversations.where(team_id: user_team_ids))
+    accessible_restricted_conversations = permitted_conversations.where(inbox_id: restricted_inbox_ids)
+                                                                 .where(allowed_conversation_relationship)
+
+    permitted_conversations.where.not(inbox_id: restricted_inbox_ids).or(accessible_restricted_conversations)
+  end
+
+  def allowed_conversation_relationship
+    conversation_table = Conversation.arel_table
+    conversation_table[:assignee_id].eq(user.id)
+                                    .or(participant_visibility(conversation_table))
+                                    .or(team_visibility(conversation_table))
+  end
+
+  def participant_visibility(conversation_table)
+    participant_conversations.where(
+      ConversationParticipant.arel_table[:conversation_id].eq(conversation_table[:id])
+    ).arel.exists
+  end
+
+  def team_visibility(conversation_table)
+    team_memberships = account.teams.joins(:team_members)
+    team_memberships.where(team_members: { user_id: user.id })
+                    .where(Team.arel_table[:id].eq(conversation_table[:team_id]))
+                    .arel.exists
+  end
+
+  def participant_conversations
+    ConversationParticipant.where(account_id: account.id, user_id: user.id)
   end
 
   def restricted_agent_inbox_access?
@@ -52,14 +75,6 @@ class Conversations::PermissionFilterService
       account_id: account.id,
       agent_conversation_access: 'assigned_participating_or_team'
     )
-  end
-
-  def participant_conversation_ids
-    ConversationParticipant.where(account_id: account.id, user_id: user.id).select(:conversation_id)
-  end
-
-  def user_team_ids
-    user.teams.where(account_id: account.id).select(:id)
   end
 
   # Same rows as accessible_conversations. `inbox_id + 0` keeps the planner from

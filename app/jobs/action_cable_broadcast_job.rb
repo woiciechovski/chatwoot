@@ -52,15 +52,21 @@ class ActionCableBroadcastJob < ApplicationJob
 
     account = conversation.account
     user_tokens = User.where(pubsub_token: members).pluck(:pubsub_token)
-    visible_user_tokens = ::Conversations::VisibleUsers.new(
-      conversation: conversation,
-      users: conversation.inbox.members
-    ).perform.pluck(:pubsub_token)
+    visible_user_tokens = visible_user_tokens_for(conversation)
     other_tokens = members - user_tokens
     recipient_user_tokens = user_tokens & visible_user_tokens
     administrator_tokens = account.administrators.where(pubsub_token: members).pluck(:pubsub_token)
 
     (other_tokens + recipient_user_tokens + administrator_tokens).uniq
+  end
+
+  def visible_user_tokens_for(conversation)
+    return [] if conversation.flow_reserved?
+
+    ::Conversations::VisibleUsers.new(
+      conversation: conversation,
+      users: conversation.inbox.members
+    ).perform.pluck(:pubsub_token)
   end
 
   def restricted_conversation_for_event(event_name, data)
@@ -72,10 +78,13 @@ class ActionCableBroadcastJob < ApplicationJob
     account = Account.find_by(id: data[:account_id])
     return if account.blank?
 
-    account.conversations.joins(:inbox)
-           .includes(:inbox, :account, :team)
-           .where(inboxes: { agent_conversation_access: 'assigned_participating_or_team' })
-           .find_by(reference.first => reference.last)
+    conversations = account.conversations.joins(:inbox).includes(:inbox, :account, :team, :conversation_flow_execution)
+    restricted_conversations = conversations.where(inboxes: { agent_conversation_access: 'assigned_participating_or_team' })
+    reserved_conversations = conversations.where(
+      id: ConversationFlowExecution.in_triage.where(account_id: account.id).select(:conversation_id)
+    )
+
+    restricted_conversations.or(reserved_conversations).find_by(reference.first => reference.last)
   end
 
   def conversation_reference(event_name, data)
