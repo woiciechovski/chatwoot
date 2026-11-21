@@ -1142,6 +1142,11 @@
       "INBOX_UPDATE_TITLE": "Configurações da Caixa de Entrada",
       "INBOX_UPDATE_SUB_TEXT": "Atualize suas configurações de caixa de entrada",
       "AUTO_ASSIGNMENT_SUB_TEXT": "Ativar ou desativar a atribuição automática de novas conversas aos agentes adicionados a essa caixa de entrada.",
+      "CONVERSATION_ACCESS": {
+        "TITLE": "Acesso às conversas",
+        "HEADER": "Limitar as conversas que os agentes desta caixa de entrada podem gerenciar",
+        "DESCRIPTION": "Os agentes podem gerenciar as conversas atribuídas a eles, aquelas de que participam e as atribuídas às equipes das quais fazem parte."
+      },
       "HMAC_VERIFICATION": "Validação de Identidade do Usuário",
       "HMAC_DESCRIPTION": "Para validar a identidade do usuário, você pode passar um `identifier_hash` para cada usuário. Você pode gerar um hash HMAC sha256 usando o `identifier` com a chave mostrada aqui.",
       "HMAC_LINK_TO_DOCS": "Você pode ler mais aqui.",
