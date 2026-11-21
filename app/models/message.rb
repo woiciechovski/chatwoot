@@ -65,6 +65,7 @@ class Message < ApplicationRecord
 
   before_validation :ensure_content_type
   before_validation :prevent_message_flooding
+  before_validation :reserve_conversation_flow, on: :create
   before_save :ensure_processed_message_content
   before_save :ensure_in_reply_to
 
@@ -79,6 +80,7 @@ class Message < ApplicationRecord
   validates :content_type, presence: true
   validates :content, length: { maximum: 150_000 }
   validates :processed_message_content, length: { maximum: 150_000 }
+  validate :prevent_outgoing_message_while_reserved
 
   # when you have a temperory id in your frontend and want it echoed back via action cable
   attr_accessor :echo_id
@@ -335,6 +337,19 @@ class Message < ApplicationRecord
 
   def ensure_content_type
     self.content_type ||= Message.content_types[:text]
+  end
+
+  def reserve_conversation_flow
+    return unless incoming?
+
+    ConversationFlows::ReservationService.new(conversation: conversation, incoming_message: true).perform
+  end
+
+  def prevent_outgoing_message_while_reserved
+    return unless outgoing? || template?
+    return unless conversation&.flow_reserved?
+
+    errors.add(:base, I18n.t('conversation_flows.errors.outgoing_message_reserved'))
   end
 
   def execute_after_create_commit_callbacks

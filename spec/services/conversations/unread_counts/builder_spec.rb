@@ -42,6 +42,17 @@ RSpec.describe Conversations::UnreadCounts::Builder do
       expect(redis_set_members(store.inbox_assignee_key(account.id, inbox.id, assignee.id))).to be_empty
       expect(redis_set_members(store.inbox_key(account.id, inbox.id))).to contain_exactly(assigned_conversation.id.to_s)
     end
+
+    it 'does not include a triage reservation in unread cache memberships' do
+      conversation = create_unread_conversation(account: account, inbox: inbox)
+      flow = create(:conversation_flow, account: account, created_by: create(:user, account: account, role: :administrator), enabled: true)
+      ConversationFlowExecution.create!(account: account, conversation: conversation, conversation_flow: flow,
+                                        status: :reserved, reserved_at: Time.current)
+
+      described_class.new(account).build_base!
+
+      expect(redis_set_members(store.inbox_key(account.id, inbox.id))).to be_empty
+    end
   end
 
   describe '#build_assignment!' do

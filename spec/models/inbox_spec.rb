@@ -8,6 +8,28 @@ RSpec.describe Inbox do
   describe 'validations' do
     it { is_expected.to validate_presence_of(:account_id) }
     it { is_expected.to validate_presence_of(:name) }
+
+    it 'does not attach an inbox to a flow from another account' do
+      inbox = create(:inbox)
+      flow = create(:conversation_flow)
+
+      inbox.conversation_flow = flow
+
+      expect(inbox).not_to be_valid
+      expect(inbox.errors[:conversation_flow]).to be_present
+    end
+
+    it 'does not replace an active flow with another active flow' do
+      account = create(:account)
+      inbox = create(:inbox, account: account)
+      active_flow = create(:conversation_flow, account: account, enabled: true)
+      replacement_flow = create(:conversation_flow, account: account, enabled: true)
+      inbox.update!(conversation_flow: active_flow)
+      inbox.conversation_flow = replacement_flow
+
+      expect(inbox).not_to be_valid
+      expect(inbox.errors[:conversation_flow]).to be_present
+    end
   end
 
   describe 'associations' do

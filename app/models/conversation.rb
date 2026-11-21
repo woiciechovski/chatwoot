@@ -82,6 +82,7 @@ class Conversation < ApplicationRecord
   validates :custom_attributes, jsonb_attributes_length: true
   validates :uuid, uniqueness: true
   validate :validate_referer_url
+  validate :prevent_assignment_while_flow_reserved
 
   enum status: { open: 0, resolved: 1, pending: 2, snoozed: 3 }
   enum priority: { low: 0, medium: 1, high: 2, urgent: 3 }
@@ -132,12 +133,14 @@ class Conversation < ApplicationRecord
   has_many :attachments, through: :messages
   has_many :reporting_events, dependent: :destroy_async
   has_many :automation_rule_pending_executions, dependent: :delete_all
+  has_one :conversation_flow_execution, dependent: :destroy_async, inverse_of: :conversation
 
   before_save :ensure_snooze_until_reset
   before_save :set_status_changed_at
   before_create :determine_conversation_status
   before_create :ensure_waiting_since
   after_create :mark_contact_as_lead
+  after_create :reserve_for_conversation_flow
 
   after_update_commit :execute_after_update_commit_callbacks
   after_create_commit :notify_conversation_creation
@@ -147,8 +150,21 @@ class Conversation < ApplicationRecord
 
   delegate :auto_resolve_after, to: :account
 
+  attr_accessor :flow_transfer_in_progress, :flow_api_ingress
+
   def can_reply?
     Conversations::MessageWindowService.new(self).can_reply?
+  end
+
+  def flow_reserved?
+    conversation_flow_execution&.protected? || false
+  end
+
+  def prevent_assignment_while_flow_reserved
+    return unless flow_reserved? && !flow_transfer_in_progress
+    return unless will_save_change_to_team_id? || will_save_change_to_assignee_id? || will_save_change_to_assignee_agent_bot_id?
+
+    errors.add(:base, I18n.t('conversation_flows.errors.assignment_reserved'))
   end
 
   def language
@@ -301,6 +317,10 @@ class Conversation < ApplicationRecord
 
   def mark_contact_as_lead
     contact.update(contact_type: :lead) if contact.visitor?
+  end
+
+  def reserve_for_conversation_flow
+    ConversationFlows::ReservationService.new(conversation: self).perform
   end
 
   def validate_additional_attributes

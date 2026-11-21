@@ -2,6 +2,7 @@ class Notification::EmailNotificationService
   pattr_initialize [:notification!]
 
   def perform
+    return if flow_reserved_for_agent?
     # don't send emails if user read the push notification already
     return if notification.read_at.present?
     # don't send emails if user is not confirmed
@@ -14,6 +15,11 @@ class Notification::EmailNotificationService
   end
 
   private
+
+  def flow_reserved_for_agent?
+    notification.conversation&.flow_reserved? &&
+      notification.user.account_users.exists?(account_id: notification.account_id, role: :agent)
+  end
 
   # TODO : Clean up whatever happening over here
   # Segregate the mailers properly

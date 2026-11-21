@@ -112,6 +112,19 @@ RSpec.describe '/api/v1/accounts/:account_id/conversations/:conversation_id/dire
         expect(response).to have_http_status(:success)
         expect(response.parsed_body['content_type']).to eq('image/png')
       end
+
+      it 'does not allow an agent to upload an attachment to a reserved conversation' do
+        administrator = create(:user, account: account, role: :administrator)
+        flow = create(:conversation_flow, account: account, created_by: administrator, enabled: true)
+        inbox = web_widget.inbox
+        conversation.update!(inbox: inbox)
+        ConversationFlowExecution.create!(account: account, conversation: conversation, conversation_flow: flow,
+                                          status: :reserved, reserved_at: Time.current)
+
+        create_direct_upload(agent.create_new_auth_token)
+
+        expect(response).to have_http_status(:not_found)
+      end
     end
 
     context 'when forgery protection is enabled' do

@@ -22,6 +22,7 @@ module AssignmentHandler
   end
 
   def find_assignee_from_team
+    return unless inbox.enable_auto_assignment?
     return if team&.allow_auto_assign.blank?
 
     team_members_with_capacity = inbox.member_ids_with_assignment_capacity & team.members.ids

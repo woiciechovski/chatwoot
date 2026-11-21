@@ -9,6 +9,10 @@ class Api::V1::Accounts::BaseController < Api::BaseController
 
   private
 
+  def administrator_api_token?
+    @access_token.present? && Current.account_user&.administrator?
+  end
+
   def validate_token_api_access
     return if Current.account.api_and_webhooks_enabled?
 

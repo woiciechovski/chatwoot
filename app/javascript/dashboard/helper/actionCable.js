@@ -133,6 +133,7 @@ class ActionCableConnector extends BaseActionCableConnector {
   onConversationCreated = data => {
     this.app.$store.dispatch('addConversation', data);
     this.fetchConversationStats();
+    emitter.emit(BUS_EVENTS.TRIAGE_QUEUE_REFRESH);
   };
 
   onConversationBotHandoff = data => {
@@ -207,6 +208,7 @@ class ActionCableConnector extends BaseActionCableConnector {
       lastActivityAt,
       conversationId,
     });
+    emitter.emit(BUS_EVENTS.TRIAGE_QUEUE_REFRESH);
   };
 
   // eslint-disable-next-line class-methods-use-this
@@ -220,6 +222,7 @@ class ActionCableConnector extends BaseActionCableConnector {
   onConversationUpdated = data => {
     this.app.$store.dispatch('updateConversation', data);
     this.fetchConversationStats();
+    emitter.emit(BUS_EVENTS.TRIAGE_QUEUE_REFRESH);
   };
 
   onConversationUnreadCountChanged = () => {

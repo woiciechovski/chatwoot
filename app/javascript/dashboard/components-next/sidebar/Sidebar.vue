@@ -7,6 +7,7 @@ import { useKbd } from 'dashboard/composables/utils/useKbd';
 import { useUISettings } from 'dashboard/composables/useUISettings';
 import { useCommandBar } from '@chatwoot/jumpbar';
 import { useMapGetter } from 'dashboard/composables/store';
+import { useAdmin } from 'dashboard/composables/useAdmin';
 import { useStore } from 'vuex';
 import { useI18n } from 'vue-i18n';
 import { useSidebarKeyboardShortcuts } from './useSidebarKeyboardShortcuts';
@@ -49,6 +50,7 @@ const emit = defineEmits([
 
 const { accountScopedRoute, isOnChatwootCloud } = useAccount();
 const { isEnterprise } = useConfig();
+const { isAdmin } = useAdmin();
 const store = useStore();
 
 const searchShortcut = useKbd([`$mod`, 'k']);
@@ -404,6 +406,17 @@ const menuItems = computed(() => {
         count: 'notifications/getUnreadCount',
       },
     },
+    ...(isAdmin.value
+      ? [
+          {
+            name: 'Triage',
+            label: t('SIDEBAR.TRIAGE'),
+            icon: 'i-lucide-list-filter',
+            activeOn: ['triage_index'],
+            to: accountScopedRoute('triage_index'),
+          },
+        ]
+      : []),
     {
       name: 'Conversation',
       label: t('SIDEBAR.CONVERSATIONS'),
@@ -923,6 +936,16 @@ const menuItems = computed(() => {
           icon: 'i-lucide-repeat',
           to: accountScopedRoute('automation_list'),
         },
+        ...(isAdmin.value
+          ? [
+              {
+                name: 'Settings Flows',
+                label: t('SIDEBAR.FLOWS'),
+                icon: 'i-lucide-git-branch',
+                to: accountScopedRoute('conversation_flows_index'),
+              },
+            ]
+          : []),
         {
           name: 'Settings Agent Bots',
           label: t('SIDEBAR.AGENT_BOTS'),

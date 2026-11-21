@@ -25,6 +25,25 @@ describe Messages::MentionService do
   end
 
   describe '#perform' do
+    it 'does not create agent mentions for a reserved conversation' do
+      flow = create(:conversation_flow, account: account, created_by: admin_user, enabled: true)
+      ConversationFlowExecution.create!(account: account, conversation: conversation, conversation_flow: flow,
+                                        status: :reserved, reserved_at: Time.current)
+      conversation.association(:conversation_flow_execution).reset
+      message = build(
+        :message,
+        conversation: conversation,
+        account: account,
+        content: "hi (mention://user/#{first_agent.id}/#{first_agent.name})",
+        private: true
+      )
+
+      expect(NotificationBuilder).not_to receive(:new)
+      expect(Conversations::UserMentionJob).not_to receive(:perform_later)
+
+      described_class.new(message: message).perform
+    end
+
     context 'when message is not private' do
       it 'does not process mentions for public messages' do
         message = build(

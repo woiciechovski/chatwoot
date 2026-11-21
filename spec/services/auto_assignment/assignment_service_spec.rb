@@ -119,6 +119,17 @@ RSpec.describe AutoAssignment::AssignmentService do
         expect(agent_bot_conversation.assignee).to be_nil
       end
 
+      it 'does not auto-assign conversations reserved for triage' do
+        flow = create(:conversation_flow, account: account, created_by: create(:user, account: account, role: :administrator), enabled: true)
+        reserved_conversation = create(:conversation, account: account, inbox: inbox, status: 'open', assignee: nil)
+        ConversationFlowExecution.create!(account: account, conversation: reserved_conversation, conversation_flow: flow,
+                                          status: :reserved, reserved_at: Time.current)
+
+        expect(reserved_conversation).to be_flow_reserved
+        expect(service.perform_bulk_assignment(limit: 1)).to eq(0)
+        expect(reserved_conversation.reload.assignee).to be_nil
+      end
+
       it 'dispatches assignee changed event' do
         conversation # ensure it exists
         conversation.update!(assignee_id: nil)

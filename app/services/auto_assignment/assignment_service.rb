@@ -34,6 +34,7 @@ class AutoAssignment::AssignmentService
 
   def unassigned_conversations(limit)
     scope = inbox.conversations.unassigned.open
+                 .where.not(id: ConversationFlowExecution.in_triage.select(:conversation_id))
 
     # Skip stale backlog with no activity beyond the age threshold
     policy = inbox.assignment_policy
@@ -112,6 +113,9 @@ class AutoAssignment::AssignmentService
     Conversation.transaction do
       locked = inbox.conversations
                     .where(id: conversation.id).unassigned
+                    .where.not(
+                      id: ConversationFlowExecution.in_triage.where(account_id: inbox.account_id).select(:conversation_id)
+                    )
                     .lock('FOR UPDATE SKIP LOCKED')
                     .first
       next false unless locked

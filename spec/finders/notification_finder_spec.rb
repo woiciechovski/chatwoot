@@ -94,4 +94,28 @@ RSpec.describe NotificationFinder do
       end
     end
   end
+
+  describe 'reserved conversation notifications' do
+    let(:conversation) { create(:conversation, account: account) }
+    let(:flow) { create(:conversation_flow, account: account, enabled: true) }
+    let!(:notification) do
+      create(:notification, account: account, user: user, primary_actor: conversation)
+    end
+
+    before do
+      ConversationFlowExecution.create!(account: account, conversation: conversation, conversation_flow: flow,
+                                        status: :reserved, reserved_at: Time.current)
+    end
+
+    it 'hides reserved conversation notifications from agents, even when the row already exists' do
+      expect(described_class.new(user, account, {}).notifications).not_to include(notification)
+    end
+
+    it 'keeps reserved conversation notifications visible to administrators' do
+      administrator = create(:user, account: account, role: :administrator)
+      admin_notification = create(:notification, account: account, user: administrator, primary_actor: conversation)
+
+      expect(described_class.new(administrator, account, {}).notifications).to include(admin_notification)
+    end
+  end
 end

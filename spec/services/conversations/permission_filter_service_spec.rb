@@ -42,6 +42,31 @@ RSpec.describe Conversations::PermissionFilterService do
         expect(result).to include(another_conversation)
         expect(result.count).to eq(2)
       end
+
+      it 'excludes reserved conversations even when the agent can access the inbox' do
+        flow = create(:conversation_flow, account: account, created_by: create(:user, account: account, role: :administrator), enabled: true)
+        reserved_conversation = create(:conversation, account: account, inbox: inbox)
+        ConversationFlowExecution.create!(account: account, conversation: reserved_conversation, conversation_flow: flow,
+                                          status: :reserved, reserved_at: Time.current)
+
+        result = described_class.new(account.conversations, agent, account).perform
+
+        expect(result).to include(conversation, another_conversation)
+        expect(result).not_to include(reserved_conversation)
+      end
+
+      it 'does not let an enterprise custom role restore access to a reserved conversation' do
+        custom_role = create(:custom_role, account: account, permissions: ['conversation_manage'])
+        agent.account_users.find_by!(account: account).update!(custom_role_id: custom_role.id)
+        flow = create(:conversation_flow, account: account, created_by: create(:user, account: account, role: :administrator), enabled: true)
+        reserved_conversation = create(:conversation, account: account, inbox: inbox)
+        ConversationFlowExecution.create!(account: account, conversation: reserved_conversation, conversation_flow: flow,
+                                          status: :reserved, reserved_at: Time.current)
+
+        result = described_class.new(account.conversations, agent, account).perform
+
+        expect(result).not_to include(reserved_conversation)
+      end
     end
 
     context 'when plan_hint_selective_filter is enabled' do

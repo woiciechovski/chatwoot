@@ -30,6 +30,10 @@ export default {
       type: Boolean,
       default: true,
     },
+    readOnly: {
+      type: Boolean,
+      default: false,
+    },
   },
   data() {
     return { activeIndex: 0 };
@@ -103,12 +107,13 @@ export default {
       v-if="currentChat.id"
       :chat="currentChat"
       :show-back-button="isOnExpandedLayout && !isInboxView"
+      :read-only="readOnly"
       :class="{
-        'border-b border-b-n-weak !pt-2': !dashboardApps.length,
+        'border-b border-b-n-weak !pt-2': readOnly || !dashboardApps.length,
       }"
     />
     <woot-tabs
-      v-if="dashboardApps.length && currentChat.id"
+      v-if="!readOnly && dashboardApps.length && currentChat.id"
       :index="activeIndex"
       class="h-10"
       @change="onDashboardAppTabChange"
@@ -127,6 +132,7 @@ export default {
         v-if="currentChat.id"
         :inbox-id="inboxId"
         :is-inbox-view="isInboxView"
+        :read-only="readOnly"
       />
       <EmptyState
         v-if="!currentChat.id && !isInboxView"
@@ -134,14 +140,16 @@ export default {
       />
       <slot />
     </div>
-    <DashboardAppFrame
-      v-for="(dashboardApp, index) in dashboardApps"
-      v-show="activeIndex - 1 === index"
-      :key="currentChat.id + '-' + dashboardApp.id"
-      :is-visible="activeIndex - 1 === index"
-      :config="dashboardApps[index].content"
-      :position="index"
-      :current-chat="currentChat"
-    />
+    <template v-if="!readOnly">
+      <DashboardAppFrame
+        v-for="(dashboardApp, index) in dashboardApps"
+        v-show="activeIndex - 1 === index"
+        :key="currentChat.id + '-' + dashboardApp.id"
+        :is-visible="activeIndex - 1 === index"
+        :config="dashboardApps[index].content"
+        :position="index"
+        :current-chat="currentChat"
+      />
+    </template>
   </div>
 </template>

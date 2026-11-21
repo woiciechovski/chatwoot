@@ -102,7 +102,7 @@ class Conversations::UnreadCounts::Refresher
 
   def unread?
     # Sidebar unread counts intentionally track only open conversations.
-    return false unless conversation.open?
+    return false unless conversation.open? && !conversation.flow_reserved?
 
     incoming_messages = conversation.messages.incoming.where(account_id: account.id)
     if conversation.agent_last_seen_at

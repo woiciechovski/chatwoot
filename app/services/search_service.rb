@@ -32,6 +32,7 @@ class SearchService
 
   def filter_conversations
     conversations_query = current_account.conversations.where(inbox_id: accessable_inbox_ids)
+                                         .where.not(id: protected_conversation_ids)
                                          .joins('INNER JOIN contacts ON conversations.contact_id = contacts.id')
                                          .where("cast(conversations.display_id as text) ILIKE :search OR contacts.name ILIKE :search OR contacts.email
                             ILIKE :search OR contacts.phone_number ILIKE :search OR contacts.identifier ILIKE :search
@@ -51,7 +52,7 @@ class SearchService
     @messages = if use_gin_search
                   filter_messages_with_gin
                 elsif should_run_advanced_search?
-                  advanced_search_with_fallback
+                  filter_search_index_messages(advanced_search_with_fallback)
                 else
                   filter_messages_with_like
                 end
@@ -108,8 +109,25 @@ class SearchService
 
   def message_base_query
     query = current_account.messages.where('created_at >= ?', search_window_start)
+    query = query.where.not(conversation_id: protected_conversation_ids)
     query = query.where(inbox_id: accessable_inbox_ids) unless should_skip_inbox_filtering?
     query
+  end
+
+  def filter_search_index_messages(results)
+    return results if account_user&.administrator? || results.blank?
+
+    result_ids = results.map(&:id)
+    visible_ids = current_account.messages.where(id: result_ids)
+                                 .where.not(conversation_id: protected_conversation_ids)
+                                 .pluck(:id)
+    results.select { |message| visible_ids.include?(message.id) }
+  end
+
+  def protected_conversation_ids
+    return ConversationFlowExecution.none.select(:conversation_id) if account_user&.administrator?
+
+    ConversationFlowExecution.in_triage.where(account_id: current_account.id).select(:conversation_id)
   end
 
   def apply_message_filters(query)

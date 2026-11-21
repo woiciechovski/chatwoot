@@ -2,6 +2,7 @@ class NotificationListener < BaseListener
   def conversation_bot_handoff(event)
     conversation, account = extract_conversation_and_account(event)
     return if conversation.pending?
+    return if conversation.flow_reserved?
 
     conversation.inbox.members.each do |agent|
       NotificationBuilder.new(
@@ -16,6 +17,7 @@ class NotificationListener < BaseListener
   def conversation_created(event)
     conversation, account = extract_conversation_and_account(event)
     return if conversation.pending?
+    return if conversation.flow_reserved?
 
     conversation.inbox.members.each do |agent|
       NotificationBuilder.new(
@@ -29,6 +31,8 @@ class NotificationListener < BaseListener
 
   def assignee_changed(event)
     conversation, account = extract_conversation_and_account(event)
+    return if conversation.flow_reserved?
+
     assignee = conversation.assignee
 
     # NOTE:  The issue was that when a team change results in an assignee being set to nil,
@@ -49,6 +53,7 @@ class NotificationListener < BaseListener
 
   def message_created(event)
     message = extract_message_and_account(event)[0]
+    return if message.conversation.flow_reserved?
 
     Messages::MentionService.new(message: message).perform
     Messages::NewMessageNotificationService.new(message: message).perform

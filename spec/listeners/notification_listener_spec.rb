@@ -96,6 +96,20 @@ describe NotificationListener do
       listener.message_created(event)
     end
 
+    it 'does not create mentions or notifications for a reserved conversation' do
+      flow = create(:conversation_flow, account: account, created_by: create(:user, account: account, role: :administrator), enabled: true)
+      ConversationFlowExecution.create!(account: account, conversation: conversation, conversation_flow: flow,
+                                        status: :reserved, reserved_at: Time.current)
+      conversation.association(:conversation_flow_execution).reset
+      message = build(:message, conversation: conversation, account: account, content: 'triage message', private: false)
+      event = Events::Base.new(event_name, Time.zone.now, message: message)
+
+      expect(Messages::MentionService).not_to receive(:new)
+      expect(Messages::NewMessageNotificationService).not_to receive(:new)
+
+      listener.message_created(event)
+    end
+
     context 'when message content is empty' do
       it 'will be processed correctly' do
         builder = double

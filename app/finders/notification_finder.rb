@@ -38,6 +38,13 @@ class NotificationFinder
 
   def find_all_notifications
     @notifications = current_user.notifications.where(account_id: @current_account.id)
+    return if current_user.account_users.exists?(account_id: @current_account.id, role: :administrator)
+
+    notification_table = Notification.arel_table
+    reserved_conversation_ids = ConversationFlowExecution.in_triage.select(:conversation_id).arel
+    visible_actor = notification_table[:primary_actor_type].not_eq('Conversation')
+    visible_actor = visible_actor.or(notification_table[:primary_actor_id].not_in(reserved_conversation_ids))
+    @notifications = @notifications.where(visible_actor)
   end
 
   def filter_snoozed_notifications

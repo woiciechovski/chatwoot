@@ -4,6 +4,7 @@ class Notification::PushNotificationService
   pattr_initialize [:notification!]
 
   def perform
+    return if flow_reserved_for_agent?
     return unless user_subscribed_to_notification?
 
     notification_subscriptions.each do |subscription|
@@ -14,6 +15,11 @@ class Notification::PushNotificationService
   end
 
   private
+
+  def flow_reserved_for_agent?
+    notification.conversation&.flow_reserved? &&
+      notification.user.account_users.exists?(account_id: notification.account_id, role: :agent)
+  end
 
   delegate :user, to: :notification
   delegate :notification_subscriptions, to: :user

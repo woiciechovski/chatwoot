@@ -8,6 +8,7 @@ import { ORIENTATION, MESSAGE_STATUS } from './constants';
 
 defineProps({
   error: { type: String, required: true },
+  readOnly: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['retry']);
@@ -47,7 +48,7 @@ const canRetry = computed(() => {
       </div>
     </div>
     <button
-      v-if="canRetry"
+      v-if="canRetry && !readOnly"
       type="button"
       :disabled="status !== MESSAGE_STATUS.FAILED"
       class="bg-n-alpha-2 rounded-md size-5 grid place-content-center cursor-pointer"

@@ -31,6 +31,12 @@
 
 en:
   hello: 'Hello world'
+  conversation_flows:
+    errors:
+      assignment_reserved: 'Conversations in triage cannot be assigned directly.'
+      already_transferred: 'This conversation has already left triage.'
+      outgoing_message_reserved: 'Messages cannot be sent while a conversation is in triage.'
+      transfer_failed: 'The conversation could not be transferred. It remains in triage.'
   administrator_notifications:
     captain:
       response_usage_alert:

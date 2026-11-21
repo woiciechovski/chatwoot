@@ -360,6 +360,8 @@
     "LABELS": "Labels",
     "CUSTOM_ATTRIBUTES": "Custom Attributes",
     "AUTOMATION": "Automation",
+    "TRIAGE": "Triage",
+    "FLOWS": "Flows",
     "MACROS": "Macros",
     "TEAMS": "Teams",
     "BILLING": "Billing",
@@ -1142,6 +1144,65 @@
       "DESCRIPTION": "Are you sure you want to delete this policy? This action cannot be undone.",
       "CONFIRM_BUTTON_LABEL": "Delete",
       "CANCEL_BUTTON_LABEL": "Cancel"
+    }
+  },
+  "CONVERSATION_FLOWS": {
+    "TITLE": "Conversation flows",
+    "DESCRIPTION": "Choose which inboxes reserve new conversations for administrator triage.",
+    "SEARCH": "Search flows",
+    "NEW": "New flow",
+    "EDIT": "Edit flow",
+    "SAVE": "Save flow",
+    "CANCEL": "Cancel",
+    "CREATED": "Flow created successfully",
+    "SAVED": "Flow saved successfully",
+    "EMPTY": "No flows yet. Create a flow to configure triage for an inbox.",
+    "NO_RESULTS": "No flows match your search.",
+    "NO_DESCRIPTION": "No description",
+    "NO_INBOXES": "No inboxes assigned",
+    "STATUS": {
+      "ENABLED": "Enabled",
+      "DISABLED": "Disabled"
+    },
+    "FORM": {
+      "NAME": "Name",
+      "DESCRIPTION": "Description",
+      "INBOXES": "Inboxes",
+      "ENABLED": "Enable for new conversations"
+    },
+    "ERRORS": {
+      "LOAD": "Unable to load conversation flows.",
+      "SAVE": "Unable to save this flow. Check the inbox assignments and try again."
+    }
+  },
+  "TRIAGE": {
+    "TITLE": "Triage",
+    "SEARCH": "Search by contact or conversation",
+    "INBOX_FILTER": "Inbox",
+    "ALL_INBOXES": "All inboxes",
+    "EMPTY": "There are no conversations waiting for triage.",
+    "UNKNOWN_CONTACT": "Unknown contact",
+    "CONVERSATION_NUMBER": "Conversation {id}",
+    "NO_MESSAGE": "No messages yet",
+    "PREVIOUS": "Previous",
+    "NEXT": "Next",
+    "PAGE": "Page {page} of {totalPages}",
+    "SELECT_CONVERSATION": "Select a conversation to review its history.",
+    "TRANSFER_TITLE": "Transfer conversation",
+    "EMAIL": "Email",
+    "PHONE": "Phone",
+    "INBOX": "Inbox",
+    "FLOW": "Flow",
+    "RESERVED": "Reserved at",
+    "TRANSFER_FAILED": "The last transfer failed. You can retry.",
+    "TEAM": "Team",
+    "SELECT_TEAM": "Select a team",
+    "TRANSFER": "Transfer to team",
+    "TRANSFER_SUCCESS": "Conversation transferred successfully.",
+    "ERRORS": {
+      "LOAD": "Unable to load the triage queue.",
+      "CONVERSATION": "Unable to load this conversation.",
+      "TRANSFER": "Unable to transfer this conversation. It remains in triage."
     }
   }
 }

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2026_11_03_142055) do
+ActiveRecord::Schema[7.1].define(version: 2026_11_21_030454) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -870,6 +870,42 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_03_142055) do
     t.index ["phone_number", "account_id"], name: "index_contacts_on_phone_number_and_account_id"
   end
 
+  create_table "conversation_flow_executions", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.bigint "conversation_flow_id", null: false
+    t.bigint "conversation_id", null: false
+    t.string "status", default: "reserved", null: false
+    t.datetime "reserved_at", null: false
+    t.datetime "transferred_at"
+    t.bigint "transferred_by_id"
+    t.bigint "team_id"
+    t.text "failure_message"
+    t.datetime "failed_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id", "status", "reserved_at", "id"], name: "index_conversation_flow_executions_for_triage"
+    t.index ["account_id"], name: "index_conversation_flow_executions_on_account_id"
+    t.index ["conversation_flow_id"], name: "index_conversation_flow_executions_on_conversation_flow_id"
+    t.index ["conversation_id"], name: "index_conversation_flow_executions_on_conversation_id", unique: true
+    t.index ["team_id"], name: "index_conversation_flow_executions_on_team_id"
+    t.index ["transferred_by_id"], name: "index_conversation_flow_executions_on_transferred_by_id"
+  end
+
+  create_table "conversation_flows", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.string "name", null: false
+    t.text "description"
+    t.boolean "enabled", default: false, null: false
+    t.bigint "created_by_id"
+    t.bigint "updated_by_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id", "enabled", "id"], name: "index_conversation_flows_on_account_id_and_enabled_and_id"
+    t.index ["account_id"], name: "index_conversation_flows_on_account_id"
+    t.index ["created_by_id"], name: "index_conversation_flows_on_created_by_id"
+    t.index ["updated_by_id"], name: "index_conversation_flows_on_updated_by_id"
+  end
+
   create_table "conversation_monitor_automation_deliveries", force: :cascade do |t|
     t.bigint "account_id", null: false
     t.bigint "monitor_id", null: false
@@ -1396,8 +1432,10 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_03_142055) do
     t.integer "sender_name_type", default: 0, null: false
     t.string "business_name"
     t.jsonb "csat_config", default: {}, null: false
+    t.bigint "conversation_flow_id"
     t.index ["account_id"], name: "index_inboxes_on_account_id"
     t.index ["channel_id", "channel_type"], name: "index_inboxes_on_channel_id_and_channel_type"
+    t.index ["conversation_flow_id"], name: "index_inboxes_on_conversation_flow_id"
     t.index ["portal_id"], name: "index_inboxes_on_portal_id"
   end
 
@@ -1860,6 +1898,14 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_03_142055) do
   add_foreign_key "campaign_recipients", "campaigns", on_delete: :cascade
   add_foreign_key "campaign_recipients", "contacts", on_delete: :cascade
   add_foreign_key "campaign_recipients", "inboxes", on_delete: :cascade
+  add_foreign_key "conversation_flow_executions", "accounts", on_delete: :cascade
+  add_foreign_key "conversation_flow_executions", "conversation_flows"
+  add_foreign_key "conversation_flow_executions", "conversations", on_delete: :cascade
+  add_foreign_key "conversation_flow_executions", "teams", on_delete: :nullify
+  add_foreign_key "conversation_flow_executions", "users", column: "transferred_by_id", on_delete: :nullify
+  add_foreign_key "conversation_flows", "accounts", on_delete: :cascade
+  add_foreign_key "conversation_flows", "users", column: "created_by_id", on_delete: :nullify
+  add_foreign_key "conversation_flows", "users", column: "updated_by_id", on_delete: :nullify
   add_foreign_key "conversation_monitor_daily_usages", "accounts", on_delete: :cascade
   add_foreign_key "conversation_monitor_evaluations", "accounts", on_delete: :cascade
   add_foreign_key "conversation_monitor_evaluations", "conversation_monitors", column: "monitor_id", on_delete: :cascade
@@ -1869,6 +1915,7 @@ ActiveRecord::Schema[7.1].define(version: 2026_11_03_142055) do
   add_foreign_key "conversation_monitor_work_items", "conversations", on_delete: :cascade
   add_foreign_key "conversation_monitors", "accounts", on_delete: :cascade
   add_foreign_key "conversation_monitors", "users", on_delete: :nullify
+  add_foreign_key "inboxes", "conversation_flows", on_delete: :nullify
   add_foreign_key "inboxes", "portals"
   add_foreign_key "shopify_custom_apps", "accounts"
   add_foreign_key "user_sessions", "users"

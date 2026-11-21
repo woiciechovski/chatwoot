@@ -8,7 +8,10 @@ class ConversationPolicy < ApplicationPolicy
   end
 
   def show?
-    administrator? || agent_bot? || agent_can_view_conversation?
+    return true if administrator?
+    return false if record.flow_reserved?
+
+    agent_bot? || agent_can_view_conversation?
   end
 
   private

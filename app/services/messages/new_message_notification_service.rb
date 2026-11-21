@@ -2,6 +2,7 @@ class Messages::NewMessageNotificationService
   pattr_initialize [:message!]
 
   def perform
+    return if message.conversation.flow_reserved?
     return unless message.notifiable?
 
     notify_conversation_assignee

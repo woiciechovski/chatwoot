@@ -98,6 +98,8 @@ class Webhooks::Trigger
   end
 
   def update_message_status(error)
+    return unless message.outgoing? || message.template?
+
     Messages::StatusUpdateService.new(message, 'failed', error.message).perform
   end
 

@@ -17,9 +17,13 @@ class Conversations::PermissionFilterService
   private
 
   def accessible_conversations
-    return hinted_accessible_conversations if @plan_hint_selective_filter
+    permitted_conversations = if @plan_hint_selective_filter
+                                hinted_accessible_conversations
+                              else
+                                conversations.where(inbox: user.inboxes.where(account_id: account.id))
+                              end
 
-    conversations.where(inbox: user.inboxes.where(account_id: account.id))
+    permitted_conversations.where.not(id: ConversationFlowExecution.in_triage.where(account_id: account.id).select(:conversation_id))
   end
 
   # Same rows as accessible_conversations. `inbox_id + 0` keeps the planner from

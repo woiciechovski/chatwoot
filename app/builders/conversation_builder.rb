@@ -1,5 +1,5 @@
 class ConversationBuilder
-  pattr_initialize [:params!, :contact_inbox!]
+  pattr_initialize [:params!, :contact_inbox!, { api_integration: false }]
 
   def perform
     look_up_exising_conversation || create_new_conversation
@@ -14,7 +14,14 @@ class ConversationBuilder
   end
 
   def create_new_conversation
-    ::Conversation.create!(conversation_params)
+    ::Conversation.create!(conversation_params.merge(flow_api_ingress: inbound_api_conversation?))
+  end
+
+  def inbound_api_conversation?
+    return false unless api_integration && contact_inbox.inbox.api?
+    return false if params[:assignee_id].present? || params[:team_id].present?
+
+    params[:message].blank? || params.dig(:message, :message_type) == 'incoming'
   end
 
   def conversation_params

@@ -86,7 +86,13 @@ export default {
     ReferralBubble,
   },
   mixins: [inboxMixin],
-  setup() {
+  props: {
+    readOnly: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  setup(props) {
     const conversationPanelRef = ref(null);
     const resizableEditorWrapperRef = ref(null);
     const replyBoxRef = ref(null);
@@ -123,12 +129,14 @@ export default {
       useTrack(CONVERSATION_EVENTS.COLLAPSED_REPLY_BOX);
     };
     const showReplyBox = () => {
+      if (props.readOnly) return;
+
       isReplyBoxCollapsed.value = false;
       leaveReadingMode();
     };
     // The editor focuses itself on these shortcuts, but only once it is shown.
     const revealReplyBox = mode => {
-      if (!isReplyFolded.value) return;
+      if (props.readOnly || !isReplyFolded.value) return;
       showReplyBox();
       useTrack(CONVERSATION_EVENTS.EXPANDED_REPLY_BOX, { mode });
       nextTick(() => {
@@ -519,10 +527,12 @@ export default {
     },
 
     makeMessagesRead() {
+      if (this.readOnly) return;
+
       this.$store.dispatch('markMessagesRead', { id: this.currentChat.id });
     },
     async handleMessageRetry(message) {
-      if (!message) return;
+      if (this.readOnly || !message) return;
       const payload = useSnakeCase(message);
       await this.$store.dispatch('sendMessageWithData', payload);
     },
@@ -581,6 +591,7 @@ export default {
       :inbox-supports-reply-to="inboxSupportsReplyTo"
       :messages="timelineMessages"
       :campaign-history="visibleCampaignHistory"
+      :read-only="readOnly"
       @retry="handleMessageRetry"
     >
       <template #beforeAll>
@@ -640,7 +651,7 @@ export default {
         />
       </template>
     </MessageList>
-    <div class="flex relative flex-col bg-n-surface-1">
+    <div v-if="!readOnly" class="flex relative flex-col bg-n-surface-1">
       <div
         v-if="isAnyoneTyping"
         class="absolute flex items-center w-full h-0"

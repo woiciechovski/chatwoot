@@ -201,4 +201,20 @@ RSpec.describe Enterprise::AutoAssignment::AssignmentService, type: :service do
       end
     end
   end
+
+  it 'skips triage conversations when selecting the limited assignment batch' do
+    inbox.enable_auto_assignment = true
+    inbox.save!
+    flow = create(:conversation_flow, account: account, enabled: true)
+    reserved_conversation = create(:conversation, inbox: inbox, assignee: nil)
+    ConversationFlowExecution.create!(account: account, conversation: reserved_conversation, conversation_flow: flow,
+                                      status: :reserved, reserved_at: Time.current)
+    eligible_conversation = create(:conversation, inbox: inbox, assignee: nil)
+
+    assigned_count = assignment_service.perform_bulk_assignment(limit: 1)
+
+    expect(assigned_count).to eq(1)
+    expect(reserved_conversation.reload.assignee).to be_nil
+    expect(eligible_conversation.reload.assignee).to be_present
+  end
 end

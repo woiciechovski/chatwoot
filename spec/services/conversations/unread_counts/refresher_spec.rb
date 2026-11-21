@@ -22,6 +22,24 @@ RSpec.describe Conversations::UnreadCounts::Refresher do
     expect(store.counts_for_keys([store.inbox_key(account.id, inbox.id)])).to eq(store.inbox_key(account.id, inbox.id) => 0)
   end
 
+  it 'removes reserved conversations from cache and restores them after transfer' do
+    conversation = create_unread_conversation(account: account, inbox: inbox)
+    Conversations::UnreadCounts::Builder.new(account).build_base!
+    flow = create(:conversation_flow, account: account, created_by: create(:user, account: account, role: :administrator), enabled: true)
+    execution = ConversationFlowExecution.create!(account: account, conversation: conversation, conversation_flow: flow,
+                                                  status: :reserved, reserved_at: Time.current)
+
+    expect(described_class.new(conversation.reload).perform).to be(true)
+    expect(store.counts_for_keys(base_keys).values).to all(eq(0))
+
+    execution.update!(status: :completed, team: create(:team, account: account), transferred_at: Time.current)
+    expect(described_class.new(conversation.reload).perform).to be(true)
+    expect(store.counts_for_keys(base_keys)).to eq(
+      store.inbox_key(account.id, inbox.id) => 1,
+      store.label_inbox_key(account.id, label.id, inbox.id) => 0
+    )
+  end
+
   it 'adds an unread conversation to base cache' do
     conversation = create(:conversation, account: account, inbox: inbox, agent_last_seen_at: 1.hour.ago)
     conversation.update_labels([label.title])

@@ -69,5 +69,22 @@ RSpec.describe ConversationPolicy, type: :policy do
         expect(subject).not_to permit(agent_context, conversation)
       end
     end
+
+    context 'when an agent has inbox access to a reserved conversation' do
+      let(:inbox) { create(:inbox, account: account) }
+      let(:conversation) { create(:conversation, account: account, inbox: inbox) }
+      let(:flow) { create(:conversation_flow, account: account, created_by: administrator, enabled: true) }
+
+      before do
+        create(:inbox_member, user: agent, inbox: inbox)
+        ConversationFlowExecution.create!(account: account, conversation: conversation, conversation_flow: flow,
+                                          status: :reserved, reserved_at: Time.current)
+      end
+
+      it 'denies direct access while retaining administrator access' do
+        expect(subject).not_to permit(agent_context, conversation)
+        expect(subject).to permit(administrator_context, conversation)
+      end
+    end
   end
 end

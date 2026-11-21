@@ -18,6 +18,7 @@ class Api::V1::Accounts::Conversations::DirectUploadsController < ActiveStorage:
 
   def create
     return if @conversation.nil? || @current_account.nil?
+    return head :not_found if @conversation.flow_reserved? && !Current.account_user&.administrator?
 
     super
   end

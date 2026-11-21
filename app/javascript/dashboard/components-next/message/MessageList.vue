@@ -38,6 +38,10 @@ const props = defineProps({
     type: Array,
     default: () => [],
   },
+  readOnly: {
+    type: Boolean,
+    default: false,
+  },
   campaignHistory: {
     type: Array,
     default: () => [],
@@ -202,6 +206,7 @@ const getInReplyToMessage = parentMessage => {
         "
         :inbox-supports-reply-to="inboxSupportsReplyTo"
         :current-user-id="currentUserId"
+        :read-only="readOnly"
         data-clarity-mask="True"
         @retry="emit('retry', entry.message)"
       />

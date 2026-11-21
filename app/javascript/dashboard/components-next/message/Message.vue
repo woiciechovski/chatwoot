@@ -137,6 +137,7 @@ const props = defineProps({
   inReplyTo: { type: Object, default: null }, // eslint-disable-line vue/no-unused-properties
   isEmailInbox: { type: Boolean, default: false },
   private: { type: Boolean, default: false },
+  readOnly: { type: Boolean, default: false },
   additionalAttributes: { type: Object, default: () => ({}) }, // eslint-disable-line vue/no-unused-properties
   sender: { type: Object, default: null },
   senderId: { type: Number, default: null },
@@ -388,7 +389,7 @@ const componentToRender = computed(() => {
 });
 
 const shouldShowContextMenu = computed(() => {
-  return !props.contentAttributes?.isUnsupported;
+  return !props.readOnly && !props.contentAttributes?.isUnsupported;
 });
 
 const isBubble = computed(() => {
@@ -481,6 +482,8 @@ const shouldRenderMessage = computed(() => {
 });
 
 function openContextMenu(e) {
+  if (props.readOnly) return;
+
   const shouldSkipContextMenu =
     e.target?.classList.contains('skip-context-menu') ||
     ['a', 'img'].includes(e.target?.tagName.toLowerCase());
@@ -654,6 +657,7 @@ provideMessageContext({
         class="[grid-area:meta]"
         :class="flexOrientationClass"
         :error="contentAttributes.externalError"
+        :read-only="readOnly"
         @retry="emit('retry')"
       />
     </div>
@@ -671,7 +675,7 @@ provideMessageContext({
         @forward-email="openForwardEmail"
       />
       <ForwardEmailPanel
-        v-if="showForwardEmail"
+        v-if="showForwardEmail && !readOnly"
         :x="forwardEmailPosition.x"
         :y="forwardEmailPosition.y"
         @close="showForwardEmail = false"

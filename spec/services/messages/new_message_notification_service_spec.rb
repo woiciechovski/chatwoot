@@ -32,6 +32,18 @@ describe Messages::NewMessageNotificationService do
       create(:conversation_participant, conversation: conversation, user: assignee)
     end
 
+    it 'does not notify agents when its conversation is reserved for triage' do
+      flow = create(:conversation_flow, account: account, created_by: create(:user, account: account, role: :administrator), enabled: true)
+      ConversationFlowExecution.create!(account: account, conversation: conversation, conversation_flow: flow,
+                                        status: :reserved, reserved_at: Time.current)
+      conversation.association(:conversation_flow_execution).reset
+      message = build(:message, conversation: conversation, account: account, message_type: :incoming, private: false)
+
+      expect(NotificationBuilder).not_to receive(:new)
+
+      described_class.new(message: message).perform
+    end
+
     context 'when message is created by a participant' do
       let(:message) { create(:message, conversation: conversation, account: account, sender: participating_agent_1) }
 

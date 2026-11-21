@@ -175,6 +175,12 @@ Rails.application.routes.draw do
           resources :automation_rules, only: [:index, :create, :show, :update, :destroy] do
             post :clone
           end
+          resources :conversation_flows, only: [:index, :create, :show, :update]
+          namespace :triage do
+            resources :conversations, only: [:index, :show] do
+              post :transfer, on: :member
+            end
+          end
           resources :macros, only: [:index, :create, :show, :update, :destroy] do
             post :execute, on: :member
           end

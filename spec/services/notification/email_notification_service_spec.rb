@@ -54,6 +54,16 @@ describe Notification::EmailNotificationService do
           nil
         )
       end
+
+      it 'does not send email for a reserved conversation' do
+        flow = create(:conversation_flow, account: account, enabled: true)
+        ConversationFlowExecution.create!(account: account, conversation: conversation, conversation_flow: flow,
+                                          status: :reserved, reserved_at: Time.current)
+
+        described_class.new(notification: notification).perform
+
+        expect(AgentNotifications::ConversationNotificationsMailer).not_to have_received(:with)
+      end
     end
 
     context 'when user is not subscribed to notification type' do

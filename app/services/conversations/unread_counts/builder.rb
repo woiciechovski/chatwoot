@@ -51,6 +51,7 @@ class Conversations::UnreadCounts::Builder
            .merge(Message.incoming.reorder(nil))
            .where(messages: { account_id: account.id })
            .where(unread_since_last_seen_condition)
+           .where.not(id: ConversationFlowExecution.in_triage.where(account_id: account.id).select(:conversation_id))
            .distinct
   end
 

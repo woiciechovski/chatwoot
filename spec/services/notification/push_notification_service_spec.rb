@@ -40,6 +40,17 @@ describe Notification::PushNotificationService do
           expect(Rails.logger).to have_received(:info).with("FCM push sent to #{user.email} with title #{notification.push_message_title}")
         end
       end
+
+      it 'does not send a push notification for a reserved conversation' do
+        flow = create(:conversation_flow, account: account, enabled: true)
+        ConversationFlowExecution.create!(account: account, conversation: notification.conversation, conversation_flow: flow,
+                                          status: :reserved, reserved_at: Time.current)
+        create(:notification_subscription, :browser_push, user: notification.user)
+
+        described_class.new(notification: notification).perform
+
+        expect(WebPush).not_to have_received(:payload_send)
+      end
     end
   end
 

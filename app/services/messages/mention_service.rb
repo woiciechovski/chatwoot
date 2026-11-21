@@ -2,6 +2,7 @@ class Messages::MentionService
   pattr_initialize [:message!]
 
   def perform
+    return if message.conversation.flow_reserved?
     return unless valid_mention_message?(message)
 
     validated_mentioned_ids = filter_mentioned_ids_by_inbox

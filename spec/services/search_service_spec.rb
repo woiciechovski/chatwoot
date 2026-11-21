@@ -90,6 +90,20 @@ describe SearchService do
         expect(search.perform[:messages].map(&:id)).to eq([message2.id, message.id])
       end
 
+      it 'excludes messages from conversations reserved for triage' do
+        reserved_conversation = create(:conversation, account: account, inbox: inbox, contact: harry)
+        reserved_message = create(:message, account: account, inbox: inbox, conversation: reserved_conversation,
+                                            content: 'triage-search-secret', message_type: :incoming)
+        flow = create(:conversation_flow, account: account, created_by: create(:user, account: account, role: :administrator), enabled: true)
+        ConversationFlowExecution.create!(account: account, conversation: reserved_conversation, conversation_flow: flow,
+                                          status: :reserved, reserved_at: Time.current)
+
+        results = described_class.new(current_user: user, current_account: account, params: { q: 'triage-search-secret' },
+                                      search_type: 'Message').perform[:messages]
+
+        expect(results).not_to include(reserved_message)
+      end
+
       context 'with feature flag for search type' do
         let(:params) { { q: 'Harry' } }
         let(:search_type) { 'Message' }
@@ -268,6 +282,17 @@ describe SearchService do
         params = { q: 'Harry' }
         search = described_class.new(current_user: user, current_account: account, params: params, search_type: 'Conversation')
         expect(search.perform[:conversations].map(&:id)).to eq([conv2.id, conversation.id])
+      end
+
+      it 'excludes conversations reserved for triage' do
+        reserved_conversation = create(:conversation, contact: harry, inbox: inbox, account: account)
+        flow = create(:conversation_flow, account: account, created_by: create(:user, account: account, role: :administrator), enabled: true)
+        ConversationFlowExecution.create!(account: account, conversation: reserved_conversation, conversation_flow: flow,
+                                          status: :reserved, reserved_at: Time.current)
+        params = { q: 'Harry' }
+        search = described_class.new(current_user: user, current_account: account, params: params, search_type: 'Conversation')
+
+        expect(search.perform[:conversations]).not_to include(reserved_conversation)
       end
 
       it 'searches across conversations with display id' do

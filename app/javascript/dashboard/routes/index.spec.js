@@ -1,4 +1,4 @@
-import { validateAuthenticateRoutePermission } from './index';
+import router, { validateAuthenticateRoutePermission } from './index';
 import store from '../store'; // This import will be mocked
 import { vi } from 'vitest';
 
@@ -389,5 +389,19 @@ describe('#validateAuthenticateRoutePermission', () => {
         );
       });
     });
+  });
+});
+
+describe('triage route', () => {
+  it('is available to administrators only', () => {
+    const triageRoute = router
+      .getRoutes()
+      .find(route => route.name === 'triage_index');
+    const flowRoute = router
+      .getRoutes()
+      .find(route => route.name === 'conversation_flows_index');
+
+    expect(triageRoute.meta.permissions).toEqual(['administrator']);
+    expect(flowRoute.meta.permissions).toEqual(['administrator']);
   });
 });

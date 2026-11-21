@@ -85,6 +85,23 @@ RSpec.describe Conversation do
     end
   end
 
+  describe 'triage reservation assignment protection' do
+    it 'rejects direct team or agent assignment while the conversation is reserved' do
+      account = create(:account)
+      admin = create(:user, account: account, role: :administrator)
+      inbox = create(:inbox, account: account)
+      flow = create(:conversation_flow, account: account, created_by: admin, enabled: true)
+      inbox.update!(conversation_flow: flow)
+      conversation = create(:conversation, account: account, inbox: inbox)
+      team = create(:team, account: account)
+      agent = create(:user, account: account, role: :agent)
+
+      expect { conversation.update!(team: team) }.to raise_error(ActiveRecord::RecordInvalid)
+      expect { conversation.update!(assignee: agent) }.to raise_error(ActiveRecord::RecordInvalid)
+      expect(conversation.reload).to have_attributes(team_id: nil, assignee_id: nil)
+    end
+  end
+
   describe '.validate jsonb attributes' do
     let(:account) { create(:account) }
     let(:agent) { create(:user, email: 'agent1@example.com', account: account) }

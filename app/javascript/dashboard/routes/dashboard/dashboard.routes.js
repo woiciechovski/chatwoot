@@ -1,5 +1,6 @@
 import settings from './settings/settings.routes';
 import conversation from './conversation/conversation.routes';
+import triage from './triage/triage.routes';
 import { routes as searchRoutes } from '../../modules/search/search.routes';
 import { routes as callRoutes } from './calls/routes';
 import { routes as contactRoutes } from './contacts/routes';
@@ -30,6 +31,7 @@ export default {
         ...captainRoutes,
         ...inboxRoutes,
         ...conversation.routes,
+        ...triage.routes,
         ...settings.routes,
         ...callRoutes,
         ...contactRoutes,

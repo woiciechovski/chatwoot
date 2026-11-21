@@ -7,6 +7,14 @@ describe ActionCableListener do
   let!(:agent) { create(:user, account: account, role: :agent) }
   let!(:conversation) { create(:conversation, account: account, inbox: inbox, assignee: agent) }
 
+  def reserve_conversation_for_triage
+    flow = create(:conversation_flow, account: account, created_by: admin, enabled: true)
+    execution = ConversationFlowExecution.create!(account: account, conversation: conversation, conversation_flow: flow,
+                                                  status: :reserved, reserved_at: Time.current)
+    conversation.association(:conversation_flow_execution).reset
+    execution
+  end
+
   before do
     create(:inbox_member, inbox: inbox, user: agent)
     Current.user = nil
@@ -100,6 +108,32 @@ describe ActionCableListener do
         message.push_event_data.merge(account_id: account.id)
       )
       listener.message_created(event)
+    end
+
+    it 'sends reserved messages only to administrators and the contact' do
+      reserve_conversation_for_triage
+
+      expect(ActionCableBroadcastJob).to receive(:perform_later).with(
+        a_collection_containing_exactly(admin.pubsub_token, conversation.contact_inbox.pubsub_token),
+        'message.created', message.push_event_data.merge(account_id: account.id)
+      )
+
+      listener.message_created(event)
+    end
+
+    it 'keeps administrator-only recipients when a queued message event runs after transfer' do
+      execution = reserve_conversation_for_triage
+      queued_tokens = nil
+      allow(ActionCableBroadcastJob).to receive(:perform_later) { |tokens, _event, _data| queued_tokens = tokens }
+      allow(ActionCable.server).to receive(:broadcast)
+
+      listener.message_created(event)
+      execution.update!(status: :completed, transferred_at: Time.current, transferred_by: admin)
+      ActionCableBroadcastJob.perform_now(queued_tokens, 'message.created', message.push_event_data.merge(account_id: account.id))
+
+      expect(ActionCable.server).to have_received(:broadcast).with(admin.pubsub_token, anything)
+      expect(ActionCable.server).to have_received(:broadcast).with(conversation.contact_inbox.pubsub_token, anything)
+      expect(ActionCable.server).not_to have_received(:broadcast).with(agent.pubsub_token, anything)
     end
   end
 
@@ -278,6 +312,30 @@ describe ActionCableListener do
         conversation.push_event_data.merge(account_id: account.id)
       )
       listener.conversation_updated(event)
+    end
+
+    it 'sends reserved updates only to administrators and the contact' do
+      reserve_conversation_for_triage
+
+      expect(ActionCableBroadcastJob).to receive(:perform_later).with(
+        a_collection_containing_exactly(admin.pubsub_token, conversation.contact_inbox.pubsub_token),
+        'conversation.updated', conversation.push_event_data.merge(account_id: account.id)
+      )
+
+      listener.conversation_updated(event)
+    end
+  end
+
+  describe '#conversation_mentioned' do
+    it 'does not send reserved conversation data to the mentioned agent' do
+      reserve_conversation_for_triage
+      event = Events::Base.new(:'conversation.mentioned', Time.zone.now, conversation: conversation, user: agent)
+
+      expect(ActionCableBroadcastJob).to receive(:perform_later).with(
+        [admin.pubsub_token], 'conversation.mentioned', conversation.push_event_data.merge(account_id: account.id)
+      )
+
+      listener.conversation_mentioned(event)
     end
   end
 

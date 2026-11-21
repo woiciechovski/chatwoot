@@ -26,6 +26,7 @@ defineProps({
 });
 
 const emit = defineEmits(['changeFilter']);
+const sortBy = defineModel('sortBy', { type: String });
 
 const store = useStore();
 const { t } = useI18n();
@@ -34,6 +35,7 @@ const { updateUISettings } = useUISettings();
 
 const chatStatusFilter = useMapGetter('getChatStatusFilter');
 const chatSortFilter = useMapGetter('getChatSortFilter');
+const selectedSort = computed(() => sortBy.value ?? chatSortFilter.value);
 
 const [showActionsDropdown, toggleDropdown] = useToggle();
 
@@ -121,8 +123,7 @@ const activeChatStatusLabel = computed(
 
 const activeChatSortLabel = computed(
   () =>
-    chatSortOptions.value.find(m => m.value === chatSortFilter.value)?.label ||
-    ''
+    chatSortOptions.value.find(m => m.value === selectedSort.value)?.label || ''
 );
 
 const saveSelectedFilter = (type, value) => {
@@ -141,13 +142,20 @@ const handleStatusChange = value => {
 };
 
 const handleSortChange = value => {
+  if (sortBy.value !== undefined) {
+    sortBy.value = value;
+    return;
+  }
+
   emit('changeFilter', value, 'sort');
   store.dispatch('setChatSortFilter', value);
   saveSelectedFilter('sort', value);
 };
 
-useEmitter(CMD_SWITCH_STATUS, handleStatusChange);
-useEmitter(CMD_SWITCH_SORT, handleSortChange);
+if (sortBy.value === undefined) {
+  useEmitter(CMD_SWITCH_STATUS, handleStatusChange);
+  useEmitter(CMD_SWITCH_SORT, handleSortChange);
+}
 </script>
 
 <template>
@@ -192,7 +200,7 @@ useEmitter(CMD_SWITCH_SORT, handleSortChange);
           {{ $t('CHAT_LIST.CHAT_SORT.ORDER_BY') }}
         </span>
         <SelectMenu
-          :model-value="chatSortFilter"
+          :model-value="selectedSort"
           :options="chatSortOptions"
           :label="activeChatSortLabel"
           :sub-menu-position="isOnExpandedLayout ? 'left' : 'right'"
