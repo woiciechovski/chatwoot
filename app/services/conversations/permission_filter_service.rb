@@ -23,7 +23,33 @@ class Conversations::PermissionFilterService
                                 conversations.where(inbox: user.inboxes.where(account_id: account.id))
                               end
 
+    permitted_conversations = restrict_agent_conversation_access(permitted_conversations)
+
     permitted_conversations.where.not(id: ConversationFlowExecution.in_triage.where(account_id: account.id).select(:conversation_id))
+  end
+
+  def restrict_agent_conversation_access(permitted_conversations)
+    return permitted_conversations unless account_user&.agent?
+
+    restricted_inbox_ids = user.inboxes.where(
+      account_id: account.id,
+      agent_conversation_access: 'assigned_participating_or_team'
+    ).select(:id)
+    return permitted_conversations unless restricted_inbox_ids.exists?
+
+    restricted_inbox_conversations = permitted_conversations.where(inbox_id: restricted_inbox_ids)
+    permitted_conversations.where.not(inbox_id: restricted_inbox_ids)
+                           .or(restricted_inbox_conversations.where(assignee_id: user.id))
+                           .or(restricted_inbox_conversations.where(id: participant_conversation_ids))
+                           .or(restricted_inbox_conversations.where(team_id: user_team_ids))
+  end
+
+  def participant_conversation_ids
+    ConversationParticipant.where(account_id: account.id, user_id: user.id).select(:conversation_id)
+  end
+
+  def user_team_ids
+    user.teams.where(account_id: account.id).select(:id)
   end
 
   # Same rows as accessible_conversations. `inbox_id + 0` keeps the planner from

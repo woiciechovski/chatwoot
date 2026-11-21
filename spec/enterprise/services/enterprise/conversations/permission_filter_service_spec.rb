@@ -83,6 +83,26 @@ RSpec.describe Enterprise::Conversations::PermissionFilterService do
         expect(result).to include(other_assigned_conversation)
         expect(result).not_to include(other_inbox_conversation)
       end
+
+      it 'keeps conversation_manage inside the restricted inbox visibility boundary' do
+        test_account = create(:account)
+        test_inbox = create(:inbox, account: test_account, agent_conversation_access: 'assigned_participating_or_team')
+        test_agent = create(:user, account: test_account, role: :agent)
+        create(:inbox_member, user: test_agent, inbox: test_inbox)
+        custom_role = create(:custom_role, account: test_account, permissions: ['conversation_manage'])
+        test_agent.account_users.find_by!(account: test_account).update!(custom_role: custom_role)
+
+        team = create(:team, account: test_account)
+        create(:team_member, user: test_agent, team: team)
+        own_conversation = create(:conversation, account: test_account, inbox: test_inbox, assignee: test_agent)
+        team_conversation = create(:conversation, account: test_account, inbox: test_inbox, team: team)
+        unrelated_conversation = create(:conversation, account: test_account, inbox: test_inbox)
+
+        result = Conversations::PermissionFilterService.new(test_account.conversations, test_agent, test_account).perform
+
+        expect(result).to contain_exactly(own_conversation, team_conversation)
+        expect(result).not_to include(unrelated_conversation)
+      end
     end
 
     context 'when user has conversation_participating_manage permission' do

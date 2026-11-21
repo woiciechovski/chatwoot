@@ -17,7 +17,9 @@ class ConversationPolicy < ApplicationPolicy
   private
 
   def agent_can_view_conversation?
-    inbox_access? || team_access?
+    return inbox_access? || team_access? unless record.inbox.restricted_agent_conversation_access?
+
+    inbox_access? && (assigned_to_user? || participant? || team_access?)
   end
 
   def administrator?

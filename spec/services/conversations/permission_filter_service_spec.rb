@@ -26,6 +26,20 @@ RSpec.describe Conversations::PermissionFilterService do
       end
     end
 
+    context 'when user is an agent bot' do
+      let(:inbox) { create(:inbox, account: account, agent_conversation_access: 'assigned_participating_or_team') }
+      let(:agent_bot) { create(:agent_bot, account: account) }
+      let!(:bot_conversation) { create(:conversation, account: account, inbox: inbox) }
+
+      before { create(:agent_bot_inbox, agent_bot: agent_bot, inbox: inbox, account: account) }
+
+      it 'keeps the existing inbox-wide access behavior' do
+        result = described_class.new(account.conversations, agent_bot, account).perform
+
+        expect(result).to include(bot_conversation)
+      end
+    end
+
     context 'when user is an agent' do
       it 'returns all conversations with no further filtering' do
         inbox_ids = agent.inboxes.where(account_id: account.id).pluck(:id)
@@ -41,6 +55,39 @@ RSpec.describe Conversations::PermissionFilterService do
         expect(result).to include(conversation)
         expect(result).to include(another_conversation)
         expect(result.count).to eq(2)
+      end
+
+      context 'when inbox access is restricted to assigned, participating, and team conversations' do
+        let(:inbox) { create(:inbox, account: account, agent_conversation_access: 'assigned_participating_or_team') }
+        let(:team) { create(:team, account: account) }
+        let(:other_team) { create(:team, account: account) }
+        let(:other_agent) { create(:user, account: account, role: :agent) }
+        let!(:own_conversation) { create(:conversation, account: account, inbox: inbox, assignee: agent) }
+        let!(:other_assigned_conversation) { create(:conversation, account: account, inbox: inbox, assignee: other_agent) }
+        let!(:participating_conversation) { create(:conversation, account: account, inbox: inbox) }
+        let!(:team_conversation) { create(:conversation, account: account, inbox: inbox, team: team) }
+        let!(:other_team_conversation) { create(:conversation, account: account, inbox: inbox, team: other_team) }
+
+        before do
+          create(:team_member, user: agent, team: team)
+          create(:conversation_participant, conversation: participating_conversation, account: account, user: agent)
+        end
+
+        it 'returns only the agent assigned, participating, or team assigned conversations' do
+          result = described_class.new(account.conversations, agent, account).perform
+
+          expect(result).to contain_exactly(own_conversation, participating_conversation, team_conversation)
+          expect(result).not_to include(conversation, another_conversation, other_assigned_conversation, other_team_conversation)
+        end
+
+        it 'does not grant inbox access to a team member who is not an inbox member' do
+          team_agent = create(:user, account: account, role: :agent)
+          create(:team_member, user: team_agent, team: team)
+
+          result = described_class.new(account.conversations, team_agent, account).perform
+
+          expect(result).to be_empty
+        end
       end
 
       it 'excludes reserved conversations even when the agent can access the inbox' do

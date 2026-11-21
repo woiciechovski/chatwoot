@@ -67,5 +67,28 @@ RSpec.describe ConversationPolicy, type: :policy do
         expect(subject).not_to permit(context, conversation)
       end
     end
+
+    context 'when role grants conversation_manage in a restricted inbox' do
+      let(:custom_role) { create(:custom_role, account: account, permissions: ['conversation_manage']) }
+      let(:inbox) do
+        create(:inbox, account: account, agent_conversation_access: 'assigned_participating_or_team')
+      end
+
+      before do
+        agent_account_user.update!(role: :agent, custom_role: custom_role)
+      end
+
+      it 'allows a conversation assigned to the agent' do
+        conversation = create(:conversation, account: account, inbox: inbox, assignee: agent)
+
+        expect(subject).to permit(context, conversation)
+      end
+
+      it 'denies an unrelated conversation' do
+        conversation = create(:conversation, account: account, inbox: inbox)
+
+        expect(subject).not_to permit(context, conversation)
+      end
+    end
   end
 end

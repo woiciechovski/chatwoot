@@ -46,14 +46,14 @@
 **Interfaces:**
 - Produces: `Inbox#agent_conversation_access`, with `all` as database and model default; `Inbox#restricted_agent_conversation_access?`; API field `agent_conversation_access`.
 
-- [ ] **Step 1: Write failing model and API tests** for default `all`, accepted values, rejection of unknown values, update persistence, and API serialization.
-- [ ] **Step 2: Run the focused model and controller specs.** Expected: fail because the access mode does not exist or is not accepted/serialized.
-- [ ] **Step 3: Generate and implement the migration, model validation/helper, permitted API field, and serializer field.** Set the migration column non-null with default `all`.
-- [ ] **Step 4: Run the same focused specs.** Expected: pass.
-- [ ] **Step 5: Add a failing frontend test** proving the inbox collaborators settings show a disabled-by-default access toggle and send the restricted mode when enabled.
-- [ ] **Step 6: Run the focused Vitest spec.** Expected: fail because the control is absent.
-- [ ] **Step 7: Add the access toggle and English strings to the collaborators settings.** Save through `inboxes/updateInbox` using `agent_conversation_access`.
-- [ ] **Step 8: Run the focused Vitest spec and ESLint on the changed Vue file.** Expected: pass with no errors.
+- [x] **Step 1: Write failing model and API tests** for default `all`, accepted values, rejection of unknown values, update persistence, and API serialization.
+- [x] **Step 2: Run the focused model and controller specs.** Expected: fail because the access mode does not exist or is not accepted/serialized.
+- [x] **Step 3: Generate and implement the migration, model validation/helper, permitted API field, and serializer field.** Set the migration column non-null with default `all`.
+- [x] **Step 4: Run the same focused specs.** Expected: pass.
+- [x] **Step 5: Add a failing frontend test** proving the inbox collaborators settings show a disabled-by-default access toggle and send the restricted mode when enabled.
+- [x] **Step 6: Run the focused Vitest spec.** Expected: fail because the control is absent.
+- [x] **Step 7: Add the access toggle and English strings to the collaborators settings.** Save through `inboxes/updateInbox` using `agent_conversation_access`.
+- [x] **Step 8: Run the focused Vitest spec and ESLint on the changed Vue file.** Expected: pass with no errors.
 
 ### Task 2: Enforce visibility in lists, direct reads, and Enterprise roles
 
@@ -71,11 +71,11 @@
 - Consumes: `Inbox#restricted_agent_conversation_access?` from Task 1.
 - Produces: a shared permission scope that enforces membership plus own assignment, participation, or assigned team in restricted inboxes.
 
-- [ ] **Step 1: Add failing scope and policy examples** for own assignment, another agent's assignment, participation, team assignment, non-member team access, inbox non-member access, administrators, `all` mode, and Enterprise `conversation_manage`.
-- [ ] **Step 2: Run the four focused specs.** Expected: failures show list and direct-read behavior currently do not implement the inbox rule.
-- [ ] **Step 3: Apply the restricted inbox predicate in `PermissionFilterService` while preserving `plan_hint_selective_filter`; update `ConversationPolicy` so restricted inboxes require membership and one allowed relationship.** Keep administrator and AgentBot paths unchanged.
-- [ ] **Step 4: Confirm Enterprise's custom-role filters consume the capped core scope and its policy calls the capped core policy.** Change Enterprise files only if the tests demonstrate a bypass.
-- [ ] **Step 5: Run the four focused specs.** Expected: pass, including `conversation_manage` denial for unrelated restricted conversations.
+- [x] **Step 1: Add failing scope and policy examples** for own assignment, another agent's assignment, participation, team assignment, non-member team access, inbox non-member access, administrators, `all` mode, and Enterprise `conversation_manage`.
+- [x] **Step 2: Run the four focused specs.** Expected: failures show list and direct-read behavior currently do not implement the inbox rule.
+- [x] **Step 3: Apply the restricted inbox predicate in `PermissionFilterService` while preserving `plan_hint_selective_filter`; update `ConversationPolicy` so restricted inboxes require membership and one allowed relationship.** Keep administrator and AgentBot paths unchanged.
+- [x] **Step 4: Confirm Enterprise's custom-role filters consume the capped core scope and its policy calls the capped core policy.** Change Enterprise files only if the tests demonstrate a bypass.
+- [x] **Step 5: Run the four focused specs.** Expected: pass, including `conversation_manage` denial for unrelated restricted conversations.
 
 ### Task 3: Align unread counts and invalidate user snapshots
 

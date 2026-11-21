@@ -51,6 +51,54 @@ RSpec.describe ConversationPolicy, type: :policy do
       end
     end
 
+    context 'when inbox conversation access is restricted' do
+      let(:inbox) do
+        create(:inbox, account: account, agent_conversation_access: 'assigned_participating_or_team')
+      end
+      let(:conversation) { create(:conversation, account: account, inbox: inbox) }
+
+      before { create(:inbox_member, user: agent, inbox: inbox) }
+
+      it 'allows a conversation assigned to the agent' do
+        conversation.update!(assignee: agent)
+
+        expect(subject).to permit(agent_context, conversation)
+      end
+
+      it 'allows a conversation where the agent participates' do
+        create(:conversation_participant, conversation: conversation, account: account, user: agent)
+
+        expect(subject).to permit(agent_context, conversation)
+      end
+
+      it 'allows a team assigned conversation when the agent belongs to the team' do
+        team = create(:team, account: account)
+        create(:team_member, team: team, user: agent)
+        conversation.update!(team: team)
+
+        expect(subject).to permit(agent_context, conversation)
+      end
+
+      it 'denies an unrelated conversation in the inbox' do
+        expect(subject).not_to permit(agent_context, conversation)
+      end
+
+      it 'denies a team member who is not a member of the inbox' do
+        team = create(:team, account: account)
+        team_agent = create(:user, account: account, role: :agent)
+        create(:team_member, team: team, user: team_agent)
+        conversation.update!(team: team)
+
+        team_context = {
+          user: team_agent,
+          account: account,
+          account_user: team_agent.account_users.find_by(account: account)
+        }
+
+        expect(subject).not_to permit(team_context, conversation)
+      end
+    end
+
     context 'when agent has team access' do
       let(:team) { create(:team, account: account) }
       let(:conversation) { create(:conversation, :with_team, account: account, team: team) }
