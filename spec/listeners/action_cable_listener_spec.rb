@@ -282,6 +282,18 @@ describe ActionCableListener do
 
       listener.notification_updated(event)
     end
+
+    it 'does not broadcast a notification after the inbox access mode hides its conversation' do
+      other_agent = create(:user, account: account, role: :agent)
+      conversation.update!(assignee: other_agent)
+      inbox.update!(agent_conversation_access: 'assigned_participating_or_team')
+      notification.update!(primary_actor: conversation)
+      event = Events::Base.new(event_name, Time.zone.now, notification: notification)
+
+      expect(ActionCableBroadcastJob).not_to receive(:perform_later)
+
+      listener.notification_updated(event)
+    end
   end
 
   describe '#conversation_updated' do
@@ -367,6 +379,20 @@ describe ActionCableListener do
         array_including(agent_without_inbox_access.pubsub_token),
         anything,
         anything
+      )
+
+      listener.conversation_unread_count_changed(event)
+    end
+
+    it 'does not refresh unread counts for unrelated members of a restricted inbox' do
+      unrelated_agent = create(:user, account: account, role: :agent)
+      create(:inbox_member, inbox: inbox, user: unrelated_agent)
+      inbox.update!(agent_conversation_access: 'assigned_participating_or_team')
+
+      expect(ActionCableBroadcastJob).to receive(:perform_later).with(
+        a_collection_containing_exactly(agent.pubsub_token, admin.pubsub_token),
+        'conversation.unread_count_changed',
+        { account_id: account.id }
       )
 
       listener.conversation_unread_count_changed(event)

@@ -5,6 +5,8 @@ class Notification::PushNotificationService
 
   def perform
     return if flow_reserved_for_agent?
+    return unless ::Conversations::NotificationAccess.visible_to_recipient?(notification)
+
     return unless user_subscribed_to_notification?
 
     notification_subscriptions.each do |subscription|

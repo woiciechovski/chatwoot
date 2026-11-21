@@ -51,6 +51,21 @@ describe Notification::PushNotificationService do
 
         expect(WebPush).not_to have_received(:payload_send)
       end
+
+      it 'does not send a queued push after the inbox access mode hides the conversation' do
+        other_agent = create(:user, account: account, role: :agent)
+        conversation = notification.conversation
+        inbox = conversation.inbox
+        conversation.update!(assignee: other_agent)
+        create(:inbox_member, inbox: inbox, user: user)
+        inbox.update!(agent_conversation_access: 'assigned_participating_or_team')
+        create(:notification_subscription, :browser_push, user: user)
+
+        described_class.new(notification: notification).perform
+
+        expect(WebPush).not_to have_received(:payload_send)
+        expect(fcm_double).not_to have_received(:send_v1)
+      end
     end
   end
 

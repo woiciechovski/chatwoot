@@ -45,6 +45,28 @@ class NotificationFinder
     visible_actor = notification_table[:primary_actor_type].not_eq('Conversation')
     visible_actor = visible_actor.or(notification_table[:primary_actor_id].not_in(reserved_conversation_ids))
     @notifications = @notifications.where(visible_actor)
+    filter_inaccessible_restricted_conversation_notifications
+  end
+
+  def filter_inaccessible_restricted_conversation_notifications
+    restricted_inbox_ids = current_user.inboxes.where(
+      account_id: current_account.id,
+      agent_conversation_access: 'assigned_participating_or_team'
+    ).select(:id)
+    return unless restricted_inbox_ids.exists?
+
+    restricted_conversations = current_account.conversations.where(inbox_id: restricted_inbox_ids)
+    visible_conversation_ids = Conversations::PermissionFilterService.new(
+      restricted_conversations,
+      current_user,
+      current_account
+    ).perform.select(:id)
+    inaccessible_notifications = @notifications.where(
+      primary_actor_type: 'Conversation',
+      primary_actor_id: restricted_conversations.select(:id)
+    ).where.not(primary_actor_id: visible_conversation_ids)
+
+    @notifications = @notifications.where.not(id: inaccessible_notifications.select(:id))
   end
 
   def filter_snoozed_notifications

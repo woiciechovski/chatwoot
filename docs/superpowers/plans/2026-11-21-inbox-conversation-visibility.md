@@ -115,11 +115,11 @@
 - Consumes: Task 1's inbox mode and Task 2's capped permission scope.
 - Produces: notification listings, delayed deliveries, conversation broadcasts, and unread-count broadcasts that exclude agents who cannot access a restricted conversation.
 
-- [ ] **Step 1: Write failing tests** showing a prior notification is hidden, queued email/push delivery is skipped after visibility is restricted, and realtime recipients exclude unrelated inbox members while retaining eligible agents and administrators.
-- [ ] **Step 2: Run the focused finder, service, and listener specs.** Expected: failures because the current paths target all existing notifications or inbox members.
-- [ ] **Step 3: Filter existing conversation notifications using the restricted inbox conversation scope; re-check direct policy access before delayed email/push delivery.** Leave non-conversation notifications and all-mode behavior unchanged.
-- [ ] **Step 4: Limit realtime recipients to inbox members satisfying the restricted assignment/participant/team rule; preserve admin and reserved-flow behavior.** Keep recipient selection query-based.
-- [ ] **Step 5: Run the focused finder, delivery, listener, and broadcast-scope specs.** Expected: pass with no restricted conversation data sent to unrelated agents.
+- [x] **Step 1: Write failing tests** showing a prior notification is hidden, queued email/push delivery is skipped after visibility is restricted, and realtime recipients exclude unrelated inbox members while retaining eligible agents and administrators.
+- [x] **Step 2: Run the focused finder, service, and listener specs.** Expected: failures because the current paths target all existing notifications or inbox members.
+- [x] **Step 3: Filter existing conversation notifications using the restricted inbox conversation scope; re-check direct policy access before delayed email/push delivery.** Leave non-conversation notifications and all-mode behavior unchanged.
+- [x] **Step 4: Limit realtime recipients to inbox members satisfying the restricted assignment/participant/team rule; preserve admin and reserved-flow behavior.** Keep recipient selection query-based.
+- [x] **Step 5: Run the focused finder, delivery, listener, and broadcast-scope specs.** Expected: pass with no restricted conversation data sent to unrelated agents.
 
 ### Task 5: Whole-feature verification and review
 

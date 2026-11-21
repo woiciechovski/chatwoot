@@ -14,6 +14,9 @@ class ActionCableBroadcastJob < ApplicationJob
     return if members.blank?
 
     broadcast_data = prepare_broadcast_data(event_name, data)
+    members = members_with_current_conversation_access(members, event_name, data)
+    return if members.blank?
+
     broadcast_to_members(members, event_name, broadcast_data)
   end
 
@@ -27,6 +30,7 @@ class ActionCableBroadcastJob < ApplicationJob
 
     account = Account.find(data[:account_id])
     conversation = account.conversations.find_by!(display_id: data[:id])
+    @broadcast_conversation = conversation
     broadcast_data = conversation.push_event_data.merge(account_id: data[:account_id])
     if event_name == ASSIGNEE_CHANGED
       # Keep the original assignment together even when the conversation is
@@ -40,6 +44,53 @@ class ActionCableBroadcastJob < ApplicationJob
       }
     end
     broadcast_data
+  end
+
+  def members_with_current_conversation_access(members, event_name, data)
+    conversation = restricted_conversation_for_event(event_name, data)
+    return members if conversation.blank?
+
+    account = conversation.account
+    user_tokens = User.where(pubsub_token: members).pluck(:pubsub_token)
+    visible_user_tokens = ::Conversations::VisibleUsers.new(
+      conversation: conversation,
+      users: conversation.inbox.members
+    ).perform.pluck(:pubsub_token)
+    other_tokens = members - user_tokens
+    recipient_user_tokens = user_tokens & visible_user_tokens
+    administrator_tokens = account.administrators.where(pubsub_token: members).pluck(:pubsub_token)
+
+    (other_tokens + recipient_user_tokens + administrator_tokens).uniq
+  end
+
+  def restricted_conversation_for_event(event_name, data)
+    return @broadcast_conversation if defined?(@broadcast_conversation)
+
+    reference = conversation_reference(event_name, data)
+    return if reference.blank?
+
+    account = Account.find_by(id: data[:account_id])
+    return if account.blank?
+
+    account.conversations.joins(:inbox)
+           .includes(:inbox, :account, :team)
+           .where(inboxes: { agent_conversation_access: 'assigned_participating_or_team' })
+           .find_by(reference.first => reference.last)
+  end
+
+  def conversation_reference(event_name, data)
+    data = data.with_indifferent_access
+    return [:display_id, data[:conversation_id]] if data[:conversation_id].present?
+    return [:display_id, data.dig(:conversation, :id) || data[:id]] if event_name.to_s.start_with?('conversation.')
+
+    notification_reference(data)
+  end
+
+  def notification_reference(data)
+    notification = data[:notification]
+    return unless notification.present? && notification[:primary_actor_type] == 'Conversation'
+
+    [:id, notification[:primary_actor_id]]
   end
 
   def broadcast_to_members(members, event_name, broadcast_data)

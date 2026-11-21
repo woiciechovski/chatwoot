@@ -3,6 +3,8 @@ class Notification::EmailNotificationService
 
   def perform
     return if flow_reserved_for_agent?
+    return unless ::Conversations::NotificationAccess.visible_to_recipient?(notification)
+
     # don't send emails if user read the push notification already
     return if notification.read_at.present?
     # don't send emails if user is not confirmed

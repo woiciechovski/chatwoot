@@ -6,7 +6,10 @@ class Conversations::UnreadCounts::BroadcastScope
   end
 
   def perform
-    return [conversation.account, conversation.inbox.members] if conversation.present?
+    if conversation.present?
+      users = ::Conversations::VisibleUsers.new(conversation: conversation, users: conversation.inbox.members).perform
+      return [conversation.account, users]
+    end
 
     deleted_conversation_scope
   end

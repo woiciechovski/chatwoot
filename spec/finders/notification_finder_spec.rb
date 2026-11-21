@@ -118,4 +118,34 @@ RSpec.describe NotificationFinder do
       expect(described_class.new(administrator, account, {}).notifications).to include(admin_notification)
     end
   end
+
+  describe 'restricted inbox conversation notifications' do
+    let!(:restricted_inbox) do
+      create(:inbox, account: account, agent_conversation_access: 'assigned_participating_or_team')
+    end
+    let!(:other_agent) { create(:user, account: account, role: :agent) }
+    let!(:unrelated_conversation) do
+      create(:conversation, account: account, inbox: restricted_inbox, assignee: other_agent)
+    end
+    let!(:visible_conversation) { create(:conversation, account: account, inbox: restricted_inbox, assignee: user) }
+    let!(:unrelated_notification) do
+      create(:notification, account: account, user: user, primary_actor: unrelated_conversation)
+    end
+    let!(:visible_notification) do
+      create(:notification, account: account, user: user, primary_actor: visible_conversation)
+    end
+    let(:params) { {} }
+
+    before do
+      create(:inbox_member, inbox: restricted_inbox, user: user)
+      create(:inbox_member, inbox: restricted_inbox, user: other_agent)
+    end
+
+    it 'hides existing notifications for conversations outside the agent access rule' do
+      notifications = described_class.new(user, account, params).notifications
+
+      expect(notifications).to include(visible_notification)
+      expect(notifications).not_to include(unrelated_notification)
+    end
+  end
 end

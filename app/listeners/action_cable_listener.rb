@@ -4,12 +4,16 @@ class ActionCableListener < BaseListener
 
   def notification_created(event)
     notification, account, unread_count, count = extract_notification_and_account(event)
+    return unless ::Conversations::NotificationAccess.visible_to_recipient?(notification)
+
     tokens = [event.data[:notification].user.pubsub_token]
     broadcast(account, tokens, NOTIFICATION_CREATED, { notification: notification.push_event_data, unread_count: unread_count, count: count })
   end
 
   def notification_updated(event)
     notification, account, unread_count, count = extract_notification_and_account(event)
+    return unless ::Conversations::NotificationAccess.visible_to_recipient?(notification)
+
     tokens = [event.data[:notification].user.pubsub_token]
     broadcast(account, tokens, NOTIFICATION_UPDATED, { notification: notification.push_event_data, unread_count: unread_count, count: count })
   end

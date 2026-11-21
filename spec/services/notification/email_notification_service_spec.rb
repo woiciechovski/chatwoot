@@ -64,6 +64,18 @@ describe Notification::EmailNotificationService do
 
         expect(AgentNotifications::ConversationNotificationsMailer).not_to have_received(:with)
       end
+
+      it 'does not send a queued email after the inbox access mode hides the conversation' do
+        other_agent = create(:user, account: account, role: :agent)
+        inbox = conversation.inbox
+        conversation.update!(assignee: other_agent)
+        create(:inbox_member, inbox: inbox, user: agent)
+        inbox.update!(agent_conversation_access: 'assigned_participating_or_team')
+
+        described_class.new(notification: notification).perform
+
+        expect(AgentNotifications::ConversationNotificationsMailer).not_to have_received(:with)
+      end
     end
 
     context 'when user is not subscribed to notification type' do
