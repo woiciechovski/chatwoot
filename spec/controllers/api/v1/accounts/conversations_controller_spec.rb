@@ -79,6 +79,29 @@ RSpec.describe 'Conversations API', type: :request do
         expect(body[:data][:payload].first[:messages]).to eq([])
       end
 
+      it 'lists and counts only open, pending and snoozed conversations for the unresolved filter' do
+        pending = create(:conversation, account: account, inbox: conversation.inbox, assignee: agent, status: :pending)
+        snoozed = create(:conversation, account: account, inbox: conversation.inbox, status: :snoozed)
+        create(:conversation, account: account, inbox: conversation.inbox, assignee: agent, status: :resolved)
+        create(:conversation, account: account, status: :pending)
+
+        params = { status: 'unresolved', inbox_id: conversation.inbox_id }
+        headers = agent.create_new_auth_token
+        counts = { 'mine_count' => 1, 'assigned_count' => 1, 'unassigned_count' => 2, 'all_count' => 3 }
+        get "/api/v1/accounts/#{account.id}/conversations", headers: headers, params: params, as: :json
+
+        expect(response).to have_http_status(:ok)
+        result = response.parsed_body.fetch('data')
+        expect(result.fetch('payload').pluck('uuid', 'status'))
+          .to contain_exactly([conversation.uuid, 'open'], [pending.uuid, 'pending'], [snoozed.uuid, 'snoozed'])
+        expect(result.fetch('meta')).to eq(counts)
+
+        get "/api/v1/accounts/#{account.id}/conversations/meta", headers: headers, params: params, as: :json
+
+        expect(response).to have_http_status(:ok)
+        expect(response.parsed_body.fetch('meta')).to eq(counts)
+      end
+
       it 'returns unattended conversations' do
         attended_conversation = create(:conversation, account: account, first_reply_created_at: Time.now.utc)
         # to ensure that waiting since value is populated

@@ -1,5 +1,6 @@
 import { shallowMount } from '@vue/test-utils';
 import ChatListHeader from '../ChatListHeader.vue';
+import ConversationBasicFilter from '../widgets/conversation/ConversationBasicFilter.vue';
 
 vi.mock('dashboard/composables/useUISettings', async () => {
   const { ref } = await import('vue');
@@ -18,6 +19,7 @@ const mountHeader = props =>
       hasAppliedFilters: false,
       hasActiveFolders: false,
       activeStatus: 'open',
+      activeSortBy: 'last_activity_at_desc',
       isOnExpandedLayout: false,
       conversationStats: { allCount: 12 },
       isListLoading: false,
@@ -79,5 +81,30 @@ describe('ChatListHeader', () => {
     expect(wrapper.find('h1').text()).toBe('Conversations');
     expect(wrapper.find('[icon="i-lucide-pen-line"]').exists()).toBe(true);
     expect(wrapper.find('[icon="i-lucide-trash-2"]').exists()).toBe(true);
+  });
+
+  it('passes the active tab filters to the shared basic filter', () => {
+    const wrapper = mountHeader({
+      activeStatus: 'pending',
+      activeSortBy: 'last_activity_at_asc',
+    });
+    const filter = wrapper.findComponent(ConversationBasicFilter);
+
+    expect(filter.props('statusFilter')).toBe('pending');
+    expect(filter.props('sortBy')).toBe('last_activity_at_asc');
+    expect(filter.props('listenToCommands')).toBe(true);
+  });
+
+  it('relays status and sort changes from the shared filter', () => {
+    const wrapper = mountHeader();
+    const filter = wrapper.findComponent(ConversationBasicFilter);
+
+    filter.vm.$emit('update:statusFilter', 'resolved');
+    filter.vm.$emit('update:sortBy', 'created_at_asc');
+
+    expect(wrapper.emitted('basicFilterChange')).toEqual([
+      ['resolved', 'status'],
+      ['created_at_asc', 'sort'],
+    ]);
   });
 });

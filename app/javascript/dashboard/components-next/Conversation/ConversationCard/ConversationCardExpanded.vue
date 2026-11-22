@@ -1,6 +1,7 @@
 <script setup>
 import { computed, useTemplateRef } from 'vue';
 import { getLastMessage } from 'dashboard/helper/conversationHelper';
+import { CONVERSATION_STATUS_BADGE_CLASSES } from 'dashboard/constants/globals';
 import CardAvatar from './CardAvatar.vue';
 import CardContent from './CardContent.vue';
 import CardLabels from './CardLabelsV5.vue';
@@ -18,11 +19,11 @@ const props = defineProps({
   currentContact: { type: Object, required: true },
   assignee: { type: Object, default: () => ({}) },
   inbox: { type: Object, default: () => ({}) },
+  inboxLabel: { type: String, default: '' },
   selected: { type: Boolean, default: false },
   isActiveChat: { type: Boolean, default: false },
   showAssignee: { type: Boolean, default: false },
   showInboxName: { type: Boolean, default: false },
-  isInboxView: { type: Boolean, default: false },
   selectable: { type: Boolean, default: true },
   conversationFirst: { type: Boolean, default: false },
 });
@@ -176,15 +177,15 @@ const selectedModel = computed({
       />
 
       <div
-        v-if="!isInboxView && showInboxName"
-        class="w-20 flex-shrink-0"
-        :class="orderClass('inbox')"
+        v-if="showInboxName"
+        class="min-w-0"
+        :class="[orderClass('inbox'), inboxLabel ? 'w-48' : 'w-20 shrink-0']"
       >
-        <InboxName v-if="showInboxName" :inbox="inbox" class="min-w-0" />
+        <InboxName :inbox="inbox" :label="inboxLabel" />
       </div>
 
       <div
-        v-if="!isInboxView && showInboxName && !conversationFirst"
+        v-if="showInboxName && !conversationFirst"
         class="w-px h-3 bg-n-slate-6 flex-shrink-0"
       />
 
@@ -256,7 +257,7 @@ const selectedModel = computed({
       </div>
 
       <div
-        class="flex-shrink-0 w-[4.375rem] text-end"
+        class="flex flex-col items-end flex-shrink-0 w-[4.375rem] text-end"
         :class="orderClass('time')"
       >
         <TimeAgo
@@ -265,6 +266,25 @@ const selectedModel = computed({
           :created-at-timestamp="chat.created_at"
           class="font-440 !text-xs text-n-slate-11"
         />
+        <span
+          v-if="CONVERSATION_STATUS_BADGE_CLASSES[chat.status]"
+          data-testid="conversation-status"
+          class="mt-0.5 max-w-full truncate rounded px-1 py-0.5 text-xxs font-medium leading-3"
+          :class="CONVERSATION_STATUS_BADGE_CLASSES[chat.status]"
+        >
+          <template v-if="chat.status === 'open'">
+            {{ $t('CHAT_LIST.CHAT_STATUS_FILTER_ITEMS.open.TEXT') }}
+          </template>
+          <template v-else-if="chat.status === 'resolved'">
+            {{ $t('CHAT_LIST.CHAT_STATUS_FILTER_ITEMS.resolved.TEXT') }}
+          </template>
+          <template v-else-if="chat.status === 'pending'">
+            {{ $t('CHAT_LIST.CHAT_STATUS_FILTER_ITEMS.pending.TEXT') }}
+          </template>
+          <template v-else-if="chat.status === 'snoozed'">
+            {{ $t('CHAT_LIST.CHAT_STATUS_FILTER_ITEMS.snoozed.TEXT') }}
+          </template>
+        </span>
       </div>
     </div>
   </div>

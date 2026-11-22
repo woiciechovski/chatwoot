@@ -10,6 +10,7 @@ export default {
     RESOLVED: 'resolved',
     PENDING: 'pending',
     SNOOZED: 'snoozed',
+    UNRESOLVED: 'unresolved',
     ALL: 'all',
   },
   CONVERSATION_TYPE: {
@@ -78,5 +79,11 @@ export default {
   },
 };
 export const DEFAULT_REDIRECT_URL = '/app/';
+export const CONVERSATION_STATUS_BADGE_CLASSES = {
+  open: 'bg-n-teal-3 text-n-teal-11',
+  pending: 'bg-n-amber-3 text-n-amber-11',
+  snoozed: 'bg-n-blue-3 text-n-blue-11',
+  resolved: 'bg-n-slate-3 text-n-slate-11',
+};
 export const META_RESTRICTION_STATUS_URL =
   'https://status.chatwoot.com/incidents';

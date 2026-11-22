@@ -59,6 +59,26 @@ describe('useFilter', () => {
   });
 
   describe('initializeStatusAndAssigneeFilterToModal', () => {
+    it('opens the advanced filter with the three statuses for unresolved', () => {
+      const { initializeStatusAndAssigneeFilterToModal } = useFilter({
+        filteri18nKey: 'FILTER',
+        attributeModel: 'conversation_attribute',
+      });
+
+      const filter = initializeStatusAndAssigneeFilterToModal(
+        'unresolved',
+        {},
+        'all'
+      );
+
+      expect(filter.filter_operator).toBe('equal_to');
+      expect(filter.values.map(value => value.id)).toEqual([
+        'open',
+        'pending',
+        'snoozed',
+      ]);
+    });
+
     it('should return status filter when activeStatus is provided', () => {
       const { initializeStatusAndAssigneeFilterToModal } = useFilter({
         filteri18nKey: 'TEST',

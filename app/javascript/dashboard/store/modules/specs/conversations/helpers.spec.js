@@ -109,6 +109,17 @@ describe('#applyPageFilters', () => {
   });
 
   describe('#filter-status', () => {
+    it.each([
+      ['open', true],
+      ['pending', true],
+      ['snoozed', true],
+      ['resolved', false],
+    ])('matches status %s against the unresolved filter', (status, matches) => {
+      expect(applyPageFilters({ status }, { status: 'unresolved' })).toBe(
+        matches
+      );
+    });
+
     it('returns true if conversation has status and status filter is active', () => {
       const filters = {
         status: 'open',

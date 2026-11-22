@@ -55,6 +55,16 @@ describe('useUISettings', () => {
     });
   });
 
+  it('returns the update request promise', () => {
+    const updatePromise = Promise.resolve('updated');
+    mockDispatch.mockReturnValueOnce(updatePromise);
+    const { updateUISettings } = useUISettings();
+
+    const result = updateUISettings({ enter_to_send_enabled: true });
+
+    expect(result).toBe(updatePromise);
+  });
+
   it('toggles sidebar UI state correctly', () => {
     const { toggleSidebarUIState } = useUISettings();
     toggleSidebarUIState('is_ct_labels_open');

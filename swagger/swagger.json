@@ -4682,11 +4682,12 @@
                 "open",
                 "resolved",
                 "pending",
-                "snoozed"
+                "snoozed",
+                "unresolved"
               ],
               "default": "open"
             },
-            "description": "Filter by conversation status."
+            "description": "Filter by conversation status. Unresolved includes open, pending, and snoozed conversations."
           },
           {
             "name": "q",
@@ -4811,11 +4812,12 @@
                 "open",
                 "resolved",
                 "pending",
-                "snoozed"
+                "snoozed",
+                "unresolved"
               ],
               "default": "open"
             },
-            "description": "Filter by conversation status."
+            "description": "Filter by conversation status. Unresolved includes open, pending, and snoozed conversations."
           },
           {
             "name": "q",

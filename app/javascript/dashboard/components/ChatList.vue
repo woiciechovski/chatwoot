@@ -1,3 +1,7 @@
+<script>
+let conversationFiltersSaveQueue = Promise.resolve();
+</script>
+
 <script setup>
 import { ref, unref, provide, computed, watch, onMounted } from 'vue';
 import { useStore } from 'vuex';
@@ -65,7 +69,7 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['conversationLoad']);
-const { uiSettings } = useUISettings();
+const { uiSettings, updateUISettings } = useUISettings();
 const { t } = useI18n();
 const router = useRouter();
 const route = useRoute();
@@ -76,8 +80,26 @@ const { buildConversationPath, buildConversationListPath } =
 const resolveAttributesModalRef = ref(null);
 
 const activeAssigneeTab = ref(wootConstants.ASSIGNEE_TYPE.ME);
-const activeStatus = ref(wootConstants.STATUS_TYPE.OPEN);
-const activeSortBy = ref(wootConstants.SORT_BY_TYPE.LAST_ACTIVITY_AT_DESC);
+const defaultFiltersByAssigneeType = {
+  [wootConstants.ASSIGNEE_TYPE.ME]: {
+    status: wootConstants.STATUS_TYPE.OPEN,
+    sortBy: wootConstants.SORT_BY_TYPE.LAST_ACTIVITY_AT_DESC,
+  },
+  [wootConstants.ASSIGNEE_TYPE.UNASSIGNED]: {
+    status: wootConstants.STATUS_TYPE.PENDING,
+    sortBy: wootConstants.SORT_BY_TYPE.LAST_ACTIVITY_AT_DESC,
+  },
+  [wootConstants.ASSIGNEE_TYPE.ALL]: {
+    status: wootConstants.STATUS_TYPE.ALL,
+    sortBy: wootConstants.SORT_BY_TYPE.LAST_ACTIVITY_AT_DESC,
+  },
+};
+const filtersByAssigneeType = ref(defaultFiltersByAssigneeType);
+const activeFilters = computed(
+  () => filtersByAssigneeType.value[activeAssigneeTab.value]
+);
+const activeStatus = computed(() => activeFilters.value.status);
+const activeSortBy = computed(() => activeFilters.value.sortBy);
 const showAdvancedFilters = ref(false);
 // chatsOnView is to store the chats that are currently visible on the screen,
 // which mirrors the conversationList.
@@ -179,23 +201,41 @@ const userPermissions = computed(() => {
   return getUserPermissions(currentUser.value, currentAccountId.value);
 });
 
-const assigneeTabItems = computed(() => {
-  return filterItemsByPermission(
+const visibleAssigneeTabs = computed(() =>
+  filterItemsByPermission(
     ASSIGNEE_TYPE_TAB_PERMISSIONS,
     userPermissions.value,
     item => item.permissions
-  ).map(({ key, count: countKey }) => ({
-    key,
-    name: t(`CHAT_LIST.ASSIGNEE_TYPE_TABS.${key}`),
-    count: conversationStats.value[countKey] || 0,
-  }));
-});
+  )
+);
 
-const showAssigneeInConversationCard = computed(() => {
-  return (
-    hasAppliedFiltersOrActiveFolders.value ||
-    activeAssigneeTab.value === wootConstants.ASSIGNEE_TYPE.ALL
-  );
+const conversationScope = computed(() => ({
+  inboxId: props.conversationInbox || undefined,
+  labels: props.label ? [props.label] : undefined,
+  teamId: props.teamId || undefined,
+  conversationType: props.conversationType || undefined,
+  tabStatuses: [
+    ...new Set(
+      visibleAssigneeTabs.value.map(
+        ({ key }) => filtersByAssigneeType.value[key].status
+      )
+    ),
+  ],
+}));
+const countsByStatus = useFunctionGetter(
+  'conversationStats/getCountsByStatus',
+  conversationScope
+);
+
+const assigneeTabItems = computed(() => {
+  return visibleAssigneeTabs.value.map(({ key, count: countKey }) => {
+    const { status } = filtersByAssigneeType.value[key];
+    return {
+      key,
+      name: t(`CHAT_LIST.ASSIGNEE_TYPE_TABS.${key}`),
+      count: countsByStatus.value[status]?.[countKey] ?? 0,
+    };
+  });
 });
 
 const currentPageFilterKey = computed(() => {
@@ -252,14 +292,11 @@ const conversationListPagination = computed(() => {
 
 const conversationFilters = computed(() => {
   return {
-    inboxId: props.conversationInbox ? props.conversationInbox : undefined,
+    ...conversationScope.value,
     assigneeType: activeAssigneeTab.value,
     status: activeStatus.value,
     sortBy: activeSortBy.value,
     page: conversationListPagination.value,
-    labels: props.label ? [props.label] : undefined,
-    teamId: props.teamId || undefined,
-    conversationType: props.conversationType || undefined,
   };
 });
 
@@ -312,12 +349,6 @@ function filterByAssigneeTab(conversations) {
   return [...conversations];
 }
 
-function sortByUnreadStatus(conversations) {
-  return [...conversations].sort((a, b) =>
-    sortComparator(a, b, wootConstants.SORT_BY_TYPE.UNREAD)
-  );
-}
-
 const conversationList = computed(() => {
   let localConversationList = [];
 
@@ -347,11 +378,10 @@ const conversationList = computed(() => {
     );
   }
 
-  if (
-    !hasAppliedFiltersOrActiveFolders.value &&
-    activeSortBy.value === wootConstants.SORT_BY_TYPE.UNREAD
-  ) {
-    localConversationList = sortByUnreadStatus(localConversationList);
+  if (!hasAppliedFiltersOrActiveFolders.value) {
+    localConversationList = [...localConversationList].sort((a, b) =>
+      sortComparator(a, b, activeSortBy.value)
+    );
   }
 
   return localConversationList;
@@ -380,14 +410,52 @@ const uniqueInboxes = computed(() => {
 
 // ---------------------- Methods -----------------------
 function setFiltersFromUISettings() {
-  const { conversations_filter_by: filterBy = {} } = uiSettings.value;
-  const { status, order_by: orderBy } = filterBy;
-  activeStatus.value = status || wootConstants.STATUS_TYPE.OPEN;
-  activeSortBy.value = Object.values(wootConstants.SORT_BY_TYPE).includes(
-    orderBy
-  )
-    ? orderBy
-    : wootConstants.SORT_BY_TYPE.LAST_ACTIVITY_AT_DESC;
+  const {
+    conversation_list_filters: savedFilters = {},
+    conversations_filter_by: legacyFilters = {},
+  } = uiSettings.value;
+  const allowedStatuses = Object.values(wootConstants.STATUS_TYPE);
+  const allowedSortOptions = Object.values(wootConstants.SORT_BY_TYPE);
+
+  filtersByAssigneeType.value = Object.fromEntries(
+    Object.entries(defaultFiltersByAssigneeType).map(
+      ([assigneeType, defaultFilters]) => {
+        const saved = savedFilters[assigneeType] || {};
+        const savedSortBy = saved.sort_by ?? legacyFilters.order_by;
+        const status = allowedStatuses.includes(saved.status)
+          ? saved.status
+          : defaultFilters.status;
+        const sortBy = allowedSortOptions.includes(savedSortBy)
+          ? savedSortBy
+          : defaultFilters.sortBy;
+
+        return [assigneeType, { status, sortBy }];
+      }
+    )
+  );
+}
+
+function saveActiveFilters(filters) {
+  const updatedFilters = { ...activeFilters.value, ...filters };
+  filtersByAssigneeType.value = {
+    ...filtersByAssigneeType.value,
+    [activeAssigneeTab.value]: updatedFilters,
+  };
+
+  const filtersForSettings = Object.fromEntries(
+    Object.entries(filtersByAssigneeType.value).map(
+      ([assigneeType, tabFilters]) => [
+        assigneeType,
+        { status: tabFilters.status, sort_by: tabFilters.sortBy },
+      ]
+    )
+  );
+
+  conversationFiltersSaveQueue = conversationFiltersSaveQueue
+    .catch(() => {})
+    .then(() =>
+      updateUISettings({ conversation_list_filters: filtersForSettings })
+    );
 }
 
 function emitConversationLoaded() {
@@ -641,6 +709,8 @@ function updateAssigneeTab(selectedTab) {
     resetBulkActions();
     emitter.emit('clearSearchInput');
     activeAssigneeTab.value = selectedTab;
+    store.dispatch('setChatStatusFilter', activeStatus.value);
+    store.dispatch('setChatSortFilter', activeSortBy.value);
     if (!currentPage.value) {
       fetchConversations();
     } else {
@@ -652,9 +722,11 @@ function updateAssigneeTab(selectedTab) {
 
 function onBasicFilterChange(value, type) {
   if (type === 'status') {
-    activeStatus.value = value;
+    saveActiveFilters({ status: value });
+    store.dispatch('setChatStatusFilter', value);
   } else {
-    activeSortBy.value = value;
+    saveActiveFilters({ sortBy: value });
+    store.dispatch('setChatSortFilter', value);
   }
 
   if (type === 'sort' && hasAppliedFiltersOrActiveFolders.value) {
@@ -924,6 +996,7 @@ watch(appliedFilters, () => resetBulkActions());
       :has-applied-filters="hasAppliedFilters"
       :has-active-folders="hasActiveFolders"
       :active-status="activeStatus"
+      :active-sort-by="activeSortBy"
       :is-on-expanded-layout="isOnExpandedLayout"
       :conversation-stats="conversationStats"
       :is-list-loading="chatListLoading && !conversationList.length"
@@ -987,7 +1060,7 @@ watch(appliedFilters, () => resetBulkActions());
       :team-id="teamId"
       :folders-id="foldersId"
       :conversation-type="conversationType"
-      :show-assignee="showAssigneeInConversationCard"
+      show-assignee
       :is-on-expanded-layout="isOnExpandedLayout"
       @load-more="loadMoreConversations"
     />

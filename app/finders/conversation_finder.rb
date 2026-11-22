@@ -2,6 +2,7 @@ class ConversationFinder
   attr_reader :current_user, :current_account, :params
 
   DEFAULT_STATUS = 'open'.freeze
+  UNRESOLVED_STATUSES = %w[open pending snoozed].freeze
   # assumptions
   # inbox_id if not given, take from all conversations, else specific to inbox
   # assignee_type if not given, take 'all'
@@ -143,9 +144,11 @@ class ConversationFinder
   end
 
   def filter_by_status
-    return if params[:status] == 'all'
+    status = params[:status] || DEFAULT_STATUS
+    return if status == 'all'
 
-    @conversations = @conversations.where(status: params[:status] || DEFAULT_STATUS)
+    statuses = status == 'unresolved' ? UNRESOLVED_STATUSES : status
+    @conversations = @conversations.where(status: statuses)
   end
 
   def filter_by_team

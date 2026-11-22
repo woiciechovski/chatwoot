@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 import { filterAttributeGroups as conversationFilterAttributeGroups } from 'dashboard/components/widgets/conversation/advancedFilterItems';
 import { filterAttributeGroups as contactFilterAttributeGroups } from 'dashboard/routes/dashboard/contacts/contactFilterItems';
 import * as OPERATORS from 'dashboard/components/widgets/FilterInput/FilterOperatorTypes.js';
+import { UNRESOLVED_CONVERSATION_STATUSES } from 'shared/constants/messages';
 
 const customAttributeInputType = key => {
   switch (key) {
@@ -96,16 +97,18 @@ export const useFilter = ({ filteri18nKey, attributeModel }) => {
     activeAssigneeTab
   ) => {
     if (activeStatus !== '') {
+      const statuses =
+        activeStatus === wootConstants.STATUS_TYPE.UNRESOLVED
+          ? UNRESOLVED_CONVERSATION_STATUSES
+          : [activeStatus];
       return {
         attribute_key: 'status',
         attribute_model: 'standard',
         filter_operator: 'equal_to',
-        values: [
-          {
-            id: activeStatus,
-            name: $t(`CHAT_LIST.CHAT_STATUS_FILTER_ITEMS.${activeStatus}.TEXT`),
-          },
-        ],
+        values: statuses.map(status => ({
+          id: status,
+          name: $t(`CHAT_LIST.CHAT_STATUS_FILTER_ITEMS.${status}.TEXT`),
+        })),
         query_operator: 'and',
         custom_attribute_type: '',
       };

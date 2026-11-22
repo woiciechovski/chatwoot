@@ -25,8 +25,10 @@ const mountComponent = (chat, currentContact = {}, props = {}) =>
       ...props,
     },
     global: {
+      mocks: { $t: key => key },
       stubs: {
         'fluent-icon': true,
+        InboxName: false,
       },
     },
   });
@@ -69,5 +71,39 @@ describe('ConversationCard', () => {
     expect(wrapper.findComponent({ name: 'Icon' }).props('icon')).toBe(
       'i-lucide-bot'
     );
+  });
+
+  it('shows the channel and assignment on one line with the full label available', () => {
+    const label = 'WhatsApp Evolution · Comercial · Ana';
+    const wrapper = mountComponent(
+      {},
+      {},
+      {
+        inbox: { id: 1, name: 'WhatsApp Evolution' },
+        inboxLabel: label,
+        showInboxName: true,
+      }
+    );
+
+    expect(wrapper.get(`[title="${label}"]`).text()).toBe(label);
+  });
+
+  it.each([
+    ['open', 'bg-n-teal-3'],
+    ['resolved', 'bg-n-slate-3'],
+    ['pending', 'bg-n-amber-3'],
+    ['snoozed', 'bg-n-blue-3'],
+  ])('shows the %s status below the activity time', (status, color) => {
+    const wrapper = mountComponent({ status });
+    const statusLabel = wrapper.find('[data-testid="conversation-status"]');
+    const activityTime = wrapper.findComponent({ name: 'TimeAgo' });
+
+    expect(statusLabel.text()).toBe(
+      `CHAT_LIST.CHAT_STATUS_FILTER_ITEMS.${status}.TEXT`
+    );
+    expect(statusLabel.classes()).toContain(color);
+    expect(
+      activityTime.element.compareDocumentPosition(statusLabel.element)
+    ).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 });

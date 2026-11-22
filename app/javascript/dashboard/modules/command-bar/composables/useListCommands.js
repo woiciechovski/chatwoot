@@ -26,6 +26,7 @@ const STATUS_ICONS = {
   pending: 'i-lucide-clock',
   snoozed: ICON_SNOOZE,
   resolved: 'i-lucide-circle-check',
+  unresolved: 'i-lucide-filter',
   all: 'i-lucide-list',
 };
 

@@ -49,7 +49,7 @@ describe('#mutations', () => {
       });
     });
 
-    it('set all state to true if all end has reached', () => {
+    it('leaves other tabs pageable when the All tab reaches its end', () => {
       const state = {
         hasEndReached: { me: false, unassigned: false, all: false },
       };
@@ -57,8 +57,8 @@ describe('#mutations', () => {
         filter: 'all',
       });
       expect(state.hasEndReached).toEqual({
-        me: true,
-        unassigned: true,
+        me: false,
+        unassigned: false,
         all: true,
       });
     });

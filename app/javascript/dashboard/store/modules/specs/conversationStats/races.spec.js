@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { actions, mutations } from '../../conversationStats';
+import { actions, getters, mutations } from '../../conversationStats';
 import conversationActions from '../../conversations/actions';
 
 vi.mock('axios');
@@ -236,6 +236,119 @@ describe('conversation count refresh races', () => {
 
     expect(axios.get).toHaveBeenCalledOnce();
     expect(state.allCount).toBe(31);
+  });
+
+  it('uses the whole list response only for tabs filtering by all statuses', async () => {
+    const filters = {
+      inboxId: 2,
+      status: 'open',
+      tabStatuses: ['open', 'pending', 'all'],
+    };
+    axios.get.mockImplementation((url, { params }) => {
+      const counts = {
+        open: { mine_count: 4, unassigned_count: 2, all_count: 6 },
+        pending: { mine_count: 1, unassigned_count: 3, all_count: 4 },
+        all: { mine_count: 10, unassigned_count: 6, all_count: 16 },
+      };
+      return Promise.resolve({ data: { meta: counts[params.status] } });
+    });
+
+    const mineRequest = actions.onListRequestStarted({ state }, filters);
+    actions.set(
+      { commit, state },
+      {
+        meta: { mine_count: 4, unassigned_count: 2, all_count: 6 },
+        request: mineRequest,
+      }
+    );
+    await vi.runAllTimersAsync();
+    const allRequest = actions.onListRequestStarted(
+      { state },
+      { ...filters, status: 'all' }
+    );
+    actions.set(
+      { commit, state },
+      {
+        meta: { mine_count: 10, unassigned_count: 6, all_count: 16 },
+        request: allRequest,
+      }
+    );
+
+    const stats = getters.getCountsByStatus(state)(filters);
+    expect(stats.open.mineCount).toBe(4);
+    expect(stats.pending.unAssignedCount).toBe(3);
+    expect(stats.all.allCount).toBe(16);
+    expect(axios.get.mock.calls.map(([, { params }]) => params.status)).toEqual(
+      ['pending', 'all']
+    );
+  });
+
+  it('refreshes each displayed status after an event on a cached tab', async () => {
+    const filters = {
+      status: 'open',
+      tabStatuses: ['open', 'pending'],
+    };
+    axios.get.mockResolvedValueOnce({
+      data: { meta: { unassigned_count: 3, all_count: 4 } },
+    });
+    const request = actions.onListRequestStarted({}, filters);
+    actions.set(
+      { commit, state },
+      { meta: { mine_count: 4, all_count: 6 }, request }
+    );
+    await vi.runAllTimersAsync();
+    axios.get.mockClear();
+
+    axios.get
+      .mockResolvedValueOnce({
+        data: { meta: { mine_count: 5, all_count: 7 } },
+      })
+      .mockResolvedValueOnce({
+        data: { meta: { unassigned_count: 2, all_count: 3 } },
+      });
+    // Switching to a cached tab does not start a list request.
+    actions.get({ commit, state }, { ...filters, status: 'pending' });
+    await vi.runAllTimersAsync();
+
+    expect(axios.get).toHaveBeenCalledTimes(2);
+    const stats = getters.getCountsByStatus(state)(filters);
+    expect(stats.open.mineCount).toBe(5);
+    expect(stats.pending.unAssignedCount).toBe(2);
+  });
+
+  it('ignores metadata from a previous inbox after switching scopes', async () => {
+    const filters = {
+      inboxId: 1,
+      status: 'open',
+      tabStatuses: ['open', 'all'],
+    };
+    let resolveOldMeta;
+    axios.get.mockReturnValueOnce(
+      new Promise(resolve => {
+        resolveOldMeta = resolve;
+      })
+    );
+    const oldRequest = actions.onListRequestStarted({}, filters);
+    actions.set(
+      { commit, state },
+      { meta: { mine_count: 4, all_count: 6 }, request: oldRequest }
+    );
+
+    const newFilters = { ...filters, inboxId: 2 };
+    expect(getters.getCountsByStatus(state)(newFilters)).toEqual({});
+    axios.get.mockResolvedValueOnce({ data: { meta: { all_count: 8 } } });
+    const newRequest = actions.onListRequestStarted({}, newFilters);
+    actions.set(
+      { commit, state },
+      { meta: { mine_count: 2, all_count: 3 }, request: newRequest }
+    );
+    await vi.runAllTimersAsync();
+
+    resolveOldMeta({ data: { meta: { all_count: 16 } } });
+    await vi.runAllTimersAsync();
+
+    expect(getters.getCountsByStatus(state)(newFilters).all.allCount).toBe(8);
+    expect(getters.getCountsByStatus(state)(filters)).toEqual({});
   });
 
   it.each([

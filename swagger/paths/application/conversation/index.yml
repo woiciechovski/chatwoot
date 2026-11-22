@@ -22,9 +22,9 @@ get:
       in: query
       schema:
         type: string
-        enum: ['all', 'open', 'resolved', 'pending', 'snoozed']
+        enum: ['all', 'open', 'resolved', 'pending', 'snoozed', 'unresolved']
         default: 'open'
-      description: Filter by conversation status.
+      description: Filter by conversation status. Unresolved includes open, pending, and snoozed conversations.
     - name: q
       in: query
       schema:

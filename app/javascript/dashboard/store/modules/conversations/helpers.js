@@ -1,8 +1,10 @@
 import {
   CONVERSATION_PRIORITY_ORDER,
   MESSAGE_TYPE,
+  UNRESOLVED_CONVERSATION_STATUSES,
 } from 'shared/constants/messages';
 import { CONTENT_TYPES } from 'dashboard/components-next/message/constants.js';
+import wootConstants from 'dashboard/constants/globals';
 
 export const languageCode = locale => locale?.split(/[-_]/)[0];
 
@@ -37,8 +39,13 @@ export const findPendingMessageIndex = (chat, message) => {
   );
 };
 
-export const filterByStatus = (chatStatus, filterStatus) =>
-  filterStatus === 'all' ? true : chatStatus === filterStatus;
+export const filterByStatus = (chatStatus, filterStatus) => {
+  if (filterStatus === wootConstants.STATUS_TYPE.ALL) return true;
+  if (filterStatus === wootConstants.STATUS_TYPE.UNRESOLVED) {
+    return UNRESOLVED_CONVERSATION_STATUSES.includes(chatStatus);
+  }
+  return chatStatus === filterStatus;
+};
 
 export const filterByInbox = (shouldFilter, inboxId, chatInboxId) => {
   const isOnInbox = Number(inboxId) === chatInboxId;

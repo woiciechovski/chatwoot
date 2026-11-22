@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
 import { getLastMessage } from 'dashboard/helper/conversationHelper';
+import { CONVERSATION_STATUS_BADGE_CLASSES } from 'dashboard/constants/globals';
 import Avatar from 'next/avatar/Avatar.vue';
 import Icon from 'dashboard/components-next/icon/Icon.vue';
 import MessagePreview from './MessagePreview.vue';
@@ -18,6 +19,7 @@ const props = defineProps({
   currentContact: { type: Object, required: true },
   assignee: { type: Object, default: () => ({}) },
   inbox: { type: Object, default: () => ({}) },
+  inboxLabel: { type: String, default: '' },
   selected: { type: Boolean, default: false },
   isActiveChat: { type: Boolean, default: false },
   showAssignee: { type: Boolean, default: false },
@@ -70,13 +72,9 @@ const showLabelsSection = computed(() => {
   return props.chat.labels?.length > 0 || hasSlaPolicyId.value;
 });
 
-const messagePreviewClass = computed(() => {
-  return [
-    hasUnread.value ? 'font-medium text-n-slate-12' : 'text-n-slate-11',
-    !props.compact && hasUnread.value ? 'ltr:pr-4 rtl:pl-4' : '',
-    props.compact && hasUnread.value ? 'ltr:pr-6 rtl:pl-6' : '',
-  ];
-});
+const messagePreviewClass = computed(() =>
+  hasUnread.value ? 'font-medium text-n-slate-12' : 'text-n-slate-11'
+);
 
 const onThumbnailHover = () => {
   hovered.value = !props.hideThumbnail;
@@ -155,7 +153,12 @@ watch(
           'mx-2': compact,
         }"
       >
-        <InboxName v-if="showInboxName" :inbox="inbox" class="flex-1 min-w-0" />
+        <InboxName
+          v-if="showInboxName"
+          :inbox="inbox"
+          :label="inboxLabel"
+          class="flex-1 min-w-0"
+        />
         <div
           class="flex items-baseline gap-2 flex-shrink-0"
           :class="{
@@ -163,7 +166,7 @@ watch(
           }"
         >
           <span
-            v-if="showAssignee && assignee.name"
+            v-if="showAssignee && assignee.name && !inboxLabel"
             class="text-n-slate-11 text-xs font-medium leading-3 py-0.5 px-0 inline-flex items-center gap-px truncate"
           >
             <Icon
@@ -178,57 +181,70 @@ watch(
           />
         </div>
       </div>
-      <h4
-        class="conversation--user text-sm my-0 mx-2 capitalize pt-0.5 text-ellipsis overflow-hidden whitespace-nowrap flex-1 min-w-0 ltr:pr-16 rtl:pl-16 text-n-slate-12"
-        :class="hasUnread ? 'font-semibold' : 'font-medium'"
-      >
-        {{ currentContact.name }}
-      </h4>
-      <VoiceCallStatus
-        v-if="voiceCallData.status"
-        key="voice-status-row"
-        :status="voiceCallData.status"
-        :direction="voiceCallData.direction"
-        :message-preview-class="messagePreviewClass"
-      />
-      <MessagePreview
-        v-else-if="lastMessageInChat"
-        key="message-preview"
-        :message="lastMessageInChat"
-        class="my-0 mx-2 leading-6 h-6 flex-1 min-w-0 text-sm"
-        :class="messagePreviewClass"
-      />
-      <p
-        v-else
-        key="no-messages"
-        class="text-n-slate-11 text-sm my-0 mx-2 leading-6 h-6 flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
-        :class="messagePreviewClass"
-      >
-        <fluent-icon
-          size="16"
-          class="-mt-0.5 align-middle inline-block text-n-slate-10"
-          icon="info"
+      <div class="ms-2 flex items-baseline gap-2">
+        <h4
+          class="conversation--user text-sm my-0 capitalize pt-0.5 truncate flex-1 min-w-0 text-n-slate-12"
+          :class="hasUnread ? 'font-semibold' : 'font-medium'"
+        >
+          {{ currentContact.name }}
+        </h4>
+        <TimeAgo
+          :last-activity-timestamp="chat.timestamp"
+          :created-at-timestamp="chat.created_at"
+          :conversation-id="chat.id"
+          class="shrink-0 whitespace-nowrap"
         />
-        <span class="mx-0.5">
-          {{ $t(`CHAT_LIST.NO_MESSAGES`) }}
-        </span>
-      </p>
-      <div
-        class="absolute flex flex-col ltr:right-3 rtl:left-3"
-        :class="showMetaSection ? 'top-8' : 'top-4'"
-      >
-        <span class="ml-auto font-normal leading-4 text-xxs">
-          <TimeAgo
-            :last-activity-timestamp="chat.timestamp"
-            :created-at-timestamp="chat.created_at"
-            :conversation-id="chat.id"
+      </div>
+      <div class="flex items-center gap-1">
+        <VoiceCallStatus
+          v-if="voiceCallData.status"
+          key="voice-status-row"
+          :status="voiceCallData.status"
+          :direction="voiceCallData.direction"
+          :message-preview-class="messagePreviewClass"
+        />
+        <MessagePreview
+          v-else-if="lastMessageInChat"
+          key="message-preview"
+          :message="lastMessageInChat"
+          class="my-0 mx-2 leading-6 h-6 flex-1 min-w-0 text-sm"
+          :class="messagePreviewClass"
+        />
+        <p
+          v-else
+          key="no-messages"
+          class="text-n-slate-11 text-sm my-0 mx-2 leading-6 h-6 flex-1 min-w-0 truncate"
+          :class="messagePreviewClass"
+        >
+          <fluent-icon
+            size="16"
+            class="-mt-0.5 align-middle inline-block text-n-slate-10"
+            icon="info"
           />
+          <span class="mx-0.5">
+            {{ $t(`CHAT_LIST.NO_MESSAGES`) }}
+          </span>
+        </p>
+        <UnreadBadge v-if="hasUnread" :count="unreadCount" />
+        <span
+          v-if="CONVERSATION_STATUS_BADGE_CLASSES[chat.status]"
+          data-testid="conversation-status"
+          class="max-w-32 shrink-0 truncate rounded px-1 py-0.5 text-xxs font-medium leading-3"
+          :class="CONVERSATION_STATUS_BADGE_CLASSES[chat.status]"
+        >
+          <template v-if="chat.status === 'open'">
+            {{ $t('CHAT_LIST.CHAT_STATUS_FILTER_ITEMS.open.TEXT') }}
+          </template>
+          <template v-else-if="chat.status === 'resolved'">
+            {{ $t('CHAT_LIST.CHAT_STATUS_FILTER_ITEMS.resolved.TEXT') }}
+          </template>
+          <template v-else-if="chat.status === 'pending'">
+            {{ $t('CHAT_LIST.CHAT_STATUS_FILTER_ITEMS.pending.TEXT') }}
+          </template>
+          <template v-else-if="chat.status === 'snoozed'">
+            {{ $t('CHAT_LIST.CHAT_STATUS_FILTER_ITEMS.snoozed.TEXT') }}
+          </template>
         </span>
-        <UnreadBadge
-          v-if="hasUnread"
-          :count="unreadCount"
-          class="ltr:ml-auto rtl:mr-auto mt-1"
-        />
       </div>
       <CardLabels
         v-if="showLabelsSection"

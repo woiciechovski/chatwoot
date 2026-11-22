@@ -52,7 +52,6 @@ watch(
 );
 
 const currentChat = useMapGetter('getSelectedChat');
-const inboxesList = useMapGetter('inboxes/getInboxes');
 const activeInbox = useMapGetter('getSelectedInbox');
 const accountId = useMapGetter('getCurrentAccountId');
 
@@ -71,12 +70,14 @@ const inbox = computed(() => {
   return inboxId ? store.getters['inboxes/getInbox'](inboxId) : {};
 });
 
-const showInboxName = computed(
-  () => !activeInbox.value && inboxesList.value.length > 1
-);
-const isInboxView = computed(() => !!activeInbox.value);
-const showAssigneeForExpandedCard = computed(
-  () => props.showExpanded || props.showAssignee
+const inboxLabel = computed(() =>
+  [
+    inbox.value.name,
+    chatMetadata.value.team?.name,
+    props.showAssignee && assignee.value.name,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 );
 
 const conversationPath = computed(() =>
@@ -188,9 +189,9 @@ const onDeleteConversation = () => {
     :inbox="inbox"
     :selected="isConversationSelected(source.id)"
     :is-active-chat="isActiveChat"
-    :show-assignee="showAssigneeForExpandedCard"
-    :show-inbox-name="showInboxName"
-    :is-inbox-view="isInboxView"
+    show-assignee
+    :show-inbox-name="!!inboxLabel"
+    :inbox-label="inboxLabel"
     @select-conversation="onExpandedSelect"
     @de-select-conversation="onExpandedSelect"
     @click="onCardClick"
@@ -207,7 +208,8 @@ const onDeleteConversation = () => {
     :selected="isConversationSelected(source.id)"
     :is-active-chat="isActiveChat"
     :show-assignee="showAssignee"
-    :show-inbox-name="showInboxName"
+    :show-inbox-name="!!inboxLabel"
+    :inbox-label="inboxLabel"
     @click="onCardClick"
     @contextmenu="openContextMenu"
     @select-conversation="selectConversation"

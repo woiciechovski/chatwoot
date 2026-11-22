@@ -14,7 +14,7 @@ import wootConstants from 'dashboard/constants/globals';
 import SelectMenu from 'dashboard/components-next/selectmenu/SelectMenu.vue';
 import NextButton from 'dashboard/components-next/button/Button.vue';
 
-defineProps({
+const props = defineProps({
   isOnExpandedLayout: {
     type: Boolean,
     required: true,
@@ -23,9 +23,14 @@ defineProps({
     type: Boolean,
     default: true,
   },
+  listenToCommands: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const emit = defineEmits(['changeFilter']);
+const statusFilter = defineModel('statusFilter', { type: String });
 const sortBy = defineModel('sortBy', { type: String });
 
 const store = useStore();
@@ -40,13 +45,15 @@ const selectedSort = computed(() => sortBy.value ?? chatSortFilter.value);
 const [showActionsDropdown, toggleDropdown] = useToggle();
 
 const currentStatusFilter = computed(() => {
-  return chatStatusFilter.value || wootConstants.STATUS_TYPE.OPEN;
+  return (
+    statusFilter.value ??
+    chatStatusFilter.value ??
+    wootConstants.STATUS_TYPE.OPEN
+  );
 });
 
 const currentSortBy = computed(() => {
-  return (
-    chatSortFilter.value || wootConstants.SORT_BY_TYPE.LAST_ACTIVITY_AT_DESC
-  );
+  return selectedSort.value || wootConstants.SORT_BY_TYPE.LAST_ACTIVITY_AT_DESC;
 });
 
 const chatStatusOptions = computed(() => [
@@ -65,6 +72,10 @@ const chatStatusOptions = computed(() => [
   {
     label: t('CHAT_LIST.CHAT_STATUS_FILTER_ITEMS.snoozed.TEXT'),
     value: 'snoozed',
+  },
+  {
+    label: t('CHAT_LIST.CHAT_STATUS_FILTER_ITEMS.unresolved.TEXT'),
+    value: wootConstants.STATUS_TYPE.UNRESOLVED,
   },
   {
     label: t('CHAT_LIST.CHAT_STATUS_FILTER_ITEMS.all.TEXT'),
@@ -117,7 +128,7 @@ const chatSortOptions = computed(() => [
 
 const activeChatStatusLabel = computed(
   () =>
-    chatStatusOptions.value.find(m => m.value === chatStatusFilter.value)
+    chatStatusOptions.value.find(m => m.value === currentStatusFilter.value)
       ?.label || ''
 );
 
@@ -136,6 +147,11 @@ const saveSelectedFilter = (type, value) => {
 };
 
 const handleStatusChange = value => {
+  if (statusFilter.value !== undefined) {
+    statusFilter.value = value;
+    return;
+  }
+
   emit('changeFilter', value, 'status');
   store.dispatch('setChatStatusFilter', value);
   saveSelectedFilter('status', value);
@@ -152,7 +168,7 @@ const handleSortChange = value => {
   saveSelectedFilter('sort', value);
 };
 
-if (sortBy.value === undefined) {
+if (sortBy.value === undefined || props.listenToCommands) {
   useEmitter(CMD_SWITCH_STATUS, handleStatusChange);
   useEmitter(CMD_SWITCH_SORT, handleSortChange);
 }
@@ -185,7 +201,7 @@ if (sortBy.value === undefined) {
           {{ $t('CHAT_LIST.CHAT_SORT.STATUS') }}
         </span>
         <SelectMenu
-          :model-value="chatStatusFilter"
+          :model-value="currentStatusFilter"
           :options="chatStatusOptions"
           :label="activeChatStatusLabel"
           :sub-menu-position="isOnExpandedLayout ? 'left' : 'right'"

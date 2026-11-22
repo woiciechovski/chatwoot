@@ -33,6 +33,9 @@
       "snoozed": {
         "TEXT": "Adiadas"
       },
+      "unresolved": {
+        "TEXT": "Não resolvida"
+      },
       "all": {
         "TEXT": "Todas"
       }

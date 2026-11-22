@@ -33,6 +33,9 @@
       "snoozed": {
         "TEXT": "Snoozed"
       },
+      "unresolved": {
+        "TEXT": "Unresolved"
+      },
       "all": {
         "TEXT": "All"
       }

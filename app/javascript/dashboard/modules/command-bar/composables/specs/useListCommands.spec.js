@@ -87,11 +87,11 @@ describe('useListCommands', () => {
     const byId = id => listCommands.value.find(command => command.id === id);
 
     byId('tab-all').run();
-    byId('status-resolved').run();
+    byId('status-unresolved').run();
     byId('sort-created_at_desc').run();
 
     expect(emitter.emit).toHaveBeenCalledWith(CMD_SWITCH_TAB, 'all');
-    expect(emitter.emit).toHaveBeenCalledWith(CMD_SWITCH_STATUS, 'resolved');
+    expect(emitter.emit).toHaveBeenCalledWith(CMD_SWITCH_STATUS, 'unresolved');
     expect(emitter.emit).toHaveBeenCalledWith(
       CMD_SWITCH_SORT,
       'created_at_desc'
