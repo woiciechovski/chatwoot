@@ -33,6 +33,8 @@ class Account < ApplicationRecord
   include AccountEmailRateLimitable
   include AccountSettingsSchema
   include AccountConversationFlows
+  include AccountRbacAssociations
+  include AccountMemberships
 
   DEFAULT_QUERY_SETTING = {
     flag_query_mode: :bit_operator,
@@ -122,14 +124,6 @@ class Account < ApplicationRecord
   after_update_commit :clear_unread_conversation_counts_cache, if: :saved_change_to_feature_conversation_unread_counts?
   after_update :resume_delayed_automations, if: -> { saved_change_to_feature_delayed_automations? && feature_delayed_automations? }
   after_destroy :remove_account_sequences
-
-  def agents
-    users.where(account_users: { role: :agent })
-  end
-
-  def administrators
-    users.where(account_users: { role: :administrator })
-  end
 
   def all_conversation_tags
     # returns array of tags

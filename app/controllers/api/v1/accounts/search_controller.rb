@@ -1,4 +1,6 @@
 class Api::V1::Accounts::SearchController < Api::V1::Accounts::BaseController
+  before_action :authorize_contact_search!, only: [:contacts]
+
   def index
     @result = search('all')
   end
@@ -20,6 +22,10 @@ class Api::V1::Accounts::SearchController < Api::V1::Accounts::BaseController
   end
 
   private
+
+  def authorize_contact_search!
+    authorize Contact, :search?
+  end
 
   def search(search_type)
     SearchService.new(

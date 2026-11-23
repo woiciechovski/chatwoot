@@ -52,7 +52,36 @@ RSpec.describe '/api/v1/accounts/{account.id}/contacts/:id/attachments', type: :
           attachment = payload.find { |a| a['conversation_id'] == conversation.display_id }
           expect(attachment).not_to be_nil
           expect(attachment).to include('id', 'message_id', 'data_url', 'file_type', 'created_at', 'sender')
+          expect(attachment['data_url']).to include(
+            "/api/v1/accounts/#{account.id}/contacts/#{contact.id}/attachments/#{attachment['id']}/download"
+          )
+          expect(attachment['data_url']).not_to include('/rails/active_storage/')
         end
+      end
+
+      it 'does not expose external media URLs through the Contact API' do
+        message = create(
+          :message,
+          account: account,
+          inbox: inbox_1,
+          conversation: contact.conversations.first,
+          message_type: 'incoming'
+        )
+        external_attachment = message.attachments.create!(
+          account: account,
+          file_type: :image,
+          external_url: 'https://cdn.example.com/private-contact.jpg'
+        )
+
+        get "/api/v1/accounts/#{account.id}/contacts/#{contact.id}/attachments",
+            headers: admin.create_new_auth_token
+
+        serialized_attachment = response.parsed_body['payload'].find do |item|
+          item['id'] == external_attachment.id
+        end
+        expect(serialized_attachment['data_url']).to eq('')
+        expect(serialized_attachment['thumb_url']).to eq('')
+        expect(response.body).not_to include('cdn.example.com/private-contact.jpg')
       end
 
       context 'with user as agent' do
@@ -79,6 +108,27 @@ RSpec.describe '/api/v1/accounts/{account.id}/contacts/:id/attachments', type: :
           expect(json_response['payload']).to be_empty
         end
       end
+    end
+  end
+
+  describe 'GET /api/v1/accounts/{account.id}/contacts/:contact_id/attachments/:id/download' do
+    it 'downloads an attachment for an authorized contact conversation' do
+      attachment = Attachment.last
+
+      get "/api/v1/accounts/#{account.id}/contacts/#{contact.id}/attachments/#{attachment.id}/download",
+          headers: admin.create_new_auth_token
+
+      expect(response).to have_http_status(:success)
+      expect(response.body).to eq(attachment.file.download)
+    end
+
+    it 'does not download attachments from conversations the agent cannot see' do
+      hidden_attachment = Attachment.last
+
+      get "/api/v1/accounts/#{account.id}/contacts/#{contact.id}/attachments/#{hidden_attachment.id}/download",
+          headers: agent.create_new_auth_token
+
+      expect(response).to have_http_status(:not_found)
     end
   end
 end

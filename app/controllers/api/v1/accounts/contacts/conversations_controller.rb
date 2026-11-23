@@ -1,6 +1,8 @@
 class Api::V1::Accounts::Contacts::ConversationsController < Api::V1::Accounts::Contacts::BaseController
   RESULTS_PER_PAGE = 25
 
+  before_action :authorize_contact_read!, only: [:index]
+
   # Scoped to a conversation, this returns it with the ones created around it: the in-thread
   # navigation walks the whole history and never needs more than that.
   def index

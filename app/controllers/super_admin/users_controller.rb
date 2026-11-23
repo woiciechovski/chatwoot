@@ -22,6 +22,18 @@ class SuperAdmin::UsersController < SuperAdmin::ApplicationController
     super
   end
 
+  def destroy
+    destroyed, denial_memberships, accounts_by_id = destroy_user_record
+
+    if destroyed
+      flash[:notice] = translate_with_resource('destroy.success')
+    else
+      record_denied_user_deletion(denial_memberships, accounts_by_id)
+      flash[:error] = requested_resource.errors.full_messages.join('<br/>')
+    end
+    redirect_to after_resource_destroyed_path(requested_resource)
+  end
+
   # Override this method to specify custom lookup behavior.
   # This will be used to set the resource for the `show`, `edit`, and `update`
   # actions.
@@ -131,6 +143,33 @@ class SuperAdmin::UsersController < SuperAdmin::ApplicationController
   end
 
   private
+
+  def destroy_user_record
+    destroyed = false
+    denial_memberships = []
+    accounts_by_id = {}
+    Rbac::MembershipLockService.with_user_memberships(user_id: requested_resource.id) do |accounts, user, memberships|
+      denial_memberships = memberships.select(&:administrator?)
+      accounts_by_id = accounts.index_by(&:id)
+      user.destroy
+      destroyed = user.destroyed?
+      requested_resource.errors.copy!(user.errors) unless destroyed
+    end
+    [destroyed, denial_memberships, accounts_by_id]
+  end
+
+  def record_denied_user_deletion(memberships, accounts_by_id)
+    memberships.each do |membership|
+      Rbac::AuditEvents::Recorder.record_denied_safely!(
+        account: accounts_by_id.fetch(membership.account_id),
+        actor: current_super_admin,
+        action: 'user.delete.denied',
+        target_type: 'AccountUser',
+        target_id: membership.id,
+        metadata: { request_id: request.request_id }
+      )
+    end
+  end
 
   def redirect_if_email_blocked(user)
     return false unless Email::SesSuppressionService.configured?

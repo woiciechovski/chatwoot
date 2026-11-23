@@ -1,7 +1,8 @@
-import { computed, unref } from 'vue';
+import { computed, reactive, unref } from 'vue';
 import { useMapGetter } from 'dashboard/composables/store';
 import { useAccount } from 'dashboard/composables/useAccount';
 import { useConfig } from 'dashboard/composables/useConfig';
+import ContactAPI from 'dashboard/api/contacts';
 import {
   getUserPermissions,
   hasPermissions,
@@ -13,6 +14,10 @@ import {
 
 import { INSTALLATION_TYPES } from 'dashboard/constants/installationTypes';
 
+const CONTACT_CAPABILITIES_TTL = 15000;
+const contactCapabilitiesByAccountUser = reactive({});
+const pendingCapabilityRequests = new Map();
+
 export function usePolicy() {
   const user = useMapGetter('getCurrentUser');
   const isFeatureEnabled = useMapGetter('accounts/isFeatureEnabledonAccount');
@@ -23,6 +28,48 @@ export function usePolicy() {
 
   const { isEnterprise, enterprisePlanName } = useConfig();
   const { accountId } = useAccount();
+
+  const getCapabilityCacheKey = () => {
+    const currentUser = user.value;
+    if (!accountId.value || !currentUser?.id) return null;
+    return `${accountId.value}:${currentUser.id}`;
+  };
+
+  const refreshContactCapabilities = () => {
+    const cacheKey = getCapabilityCacheKey();
+    if (!cacheKey) return Promise.resolve();
+
+    const cached = contactCapabilitiesByAccountUser[cacheKey];
+    if (cached?.expiresAt > Date.now()) return Promise.resolve();
+    if (pendingCapabilityRequests.has(cacheKey)) {
+      return pendingCapabilityRequests.get(cacheKey);
+    }
+
+    contactCapabilitiesByAccountUser[cacheKey] = {
+      capabilities: cached?.capabilities || null,
+      expiresAt: Date.now() + CONTACT_CAPABILITIES_TTL,
+    };
+    const request = ContactAPI.getCapabilities(accountId.value)
+      .then(({ data }) => {
+        const contactsDomain = data.domains?.find(
+          domain => domain.module === 'contacts'
+        );
+        contactCapabilitiesByAccountUser[cacheKey] = {
+          capabilities: contactsDomain?.capabilities || null,
+          expiresAt: Date.now() + CONTACT_CAPABILITIES_TTL,
+        };
+      })
+      .catch(() => {
+        contactCapabilitiesByAccountUser[cacheKey] = {
+          capabilities: null,
+          expiresAt: Date.now() + CONTACT_CAPABILITIES_TTL,
+        };
+      })
+      .finally(() => pendingCapabilityRequests.delete(cacheKey));
+
+    pendingCapabilityRequests.set(cacheKey, request);
+    return request;
+  };
 
   const getUserPermissionsForAccount = () => {
     return getUserPermissions(user.value, accountId.value);
@@ -38,6 +85,38 @@ export function usePolicy() {
     const userPermissions = getUserPermissionsForAccount();
     return hasPermissions(requiredPermissions, userPermissions);
   };
+
+  const legacyContactPermission = permission => {
+    if (
+      ['contacts.delete', 'contacts.import', 'contacts.export'].includes(
+        permission
+      )
+    ) {
+      return checkPermissions(['administrator', 'contact_manage']);
+    }
+
+    return true;
+  };
+
+  const checkContactPermissions = requiredPermissions => {
+    if (!requiredPermissions || !requiredPermissions.length) return true;
+    const cacheKey = getCapabilityCacheKey();
+    const cached = cacheKey ? contactCapabilitiesByAccountUser[cacheKey] : null;
+    if (!cached || cached.expiresAt <= Date.now()) {
+      refreshContactCapabilities();
+    }
+
+    const capabilities = cached?.capabilities;
+    return requiredPermissions.every(permission => {
+      if (capabilities && Object.hasOwn(capabilities, permission)) {
+        return capabilities[permission] === true;
+      }
+      return legacyContactPermission(permission);
+    });
+  };
+
+  const checkContactPermission = permission =>
+    checkContactPermissions([permission]);
 
   const checkInstallationType = config => {
     if (Array.isArray(config) && config.length > 0) {
@@ -142,6 +221,9 @@ export function usePolicy() {
 
   return {
     checkPermissions,
+    checkContactPermission,
+    checkContactPermissions,
+    refreshContactCapabilities,
     checkInstallationType,
     shouldShowPaywall,
     isFeatureFlagEnabled,

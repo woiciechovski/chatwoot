@@ -5,11 +5,14 @@ RSpec.describe Contacts::BulkRemoveLabelsService do
     described_class.new(
       account: account,
       contact_ids: [contact_one.id, contact_two.id, other_contact.id],
-      labels: labels
+      labels: labels,
+      authorization: authorization
     )
   end
 
   let(:account) { create(:account) }
+  let(:user) { create(:user, :administrator, account: account) }
+  let(:authorization) { Contacts::Authorization.new(account: account, user_id: user.id) }
   let!(:contact_one) { create(:contact, account: account) }
   let!(:contact_two) { create(:contact, account: account) }
   let!(:other_contact) { create(:contact) }
@@ -45,7 +48,8 @@ RSpec.describe Contacts::BulkRemoveLabelsService do
     result = described_class.new(
       account: account,
       contact_ids: [contact_one.id],
-      labels: []
+      labels: [],
+      authorization: authorization
     ).perform
 
     expect(result).to eq(success: true, updated_contact_ids: [])

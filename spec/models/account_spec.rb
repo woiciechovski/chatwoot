@@ -5,6 +5,8 @@ require 'rails_helper'
 RSpec.describe Account do
   it { is_expected.to have_many(:users).through(:account_users) }
   it { is_expected.to have_many(:account_users) }
+  it { is_expected.to have_many(:rbac_roles).dependent(:delete_all) }
+  it { is_expected.to have_many(:rbac_audit_events).dependent(:delete_all) }
   it { is_expected.to have_many(:inboxes).dependent(:destroy_async) }
   it { is_expected.to have_many(:conversations).dependent(:destroy_async) }
   it { is_expected.to have_many(:contacts).dependent(:destroy_async) }
@@ -17,6 +19,55 @@ RSpec.describe Account do
   it { is_expected.to have_many(:portals).dependent(:destroy_async) }
   it { is_expected.to have_many(:categories).dependent(:destroy_async) }
   it { is_expected.to have_many(:teams).dependent(:destroy_async) }
+
+  describe '#usable_administrators' do
+    let(:account) { create(:account) }
+
+    it 'includes unconfirmed administrator users' do
+      user = create(:user, confirmed_at: nil)
+      membership = create(:account_user, account: account, user: user, role: :administrator)
+
+      expect(account.usable_administrators).to contain_exactly(membership)
+    end
+
+    it 'includes administrators regardless of operational availability' do
+      offline = create(:account_user, account: account, role: :administrator, availability: :offline)
+      busy = create(:account_user, account: account, role: :administrator, availability: :busy)
+
+      expect(account.usable_administrators).to contain_exactly(offline, busy)
+    end
+
+    it 'does not count administrator memberships in suspended accounts' do
+      administrator = create(:account_user, account: account, role: :administrator)
+      account.update!(status: :suspended)
+
+      expect(account.usable_administrators).to be_empty
+      expect(administrator.reload).to be_administrator
+    end
+
+    it 'includes administrator memberships for SuperAdmin STI users' do
+      super_admin = create(:super_admin)
+      membership = create(:account_user, account: account, user: super_admin, role: :administrator)
+
+      expect(account.usable_administrators).to contain_exactly(membership)
+    end
+
+    it 'excludes orphaned administrator membership rows' do
+      now = Time.current
+      orphaned_membership = {
+        account_id: account.id,
+        user_id: -1,
+        role: AccountUser.roles.fetch('administrator'),
+        created_at: now,
+        updated_at: now
+      }
+      # rubocop:disable Rails/SkipsModelValidations
+      AccountUser.insert_all!([orphaned_membership])
+      # rubocop:enable Rails/SkipsModelValidations
+
+      expect(account.usable_administrators).to be_empty
+    end
+  end
 
   # This validation happens in ApplicationRecord
   describe 'length validations' do
@@ -274,6 +325,15 @@ RSpec.describe Account do
       expect(account.locale).to eq('en')
       account.destroy
       expect(ActiveRecord::Base.connection.execute(query).count).to eq(0)
+    end
+
+    it 'deletes account roles after clearing assigned account-user references' do
+      account = create(:account)
+      account_user = create(:account_user, account: account)
+      role = RbacRole.create!(account: account, name: 'Support')
+      account_user.update!(rbac_role: role)
+
+      expect { account.destroy! }.to change(RbacRole, :count).by(-1)
     end
   end
 

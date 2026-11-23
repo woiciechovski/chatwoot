@@ -11,6 +11,23 @@ RSpec.describe User do
     it { is_expected.to validate_presence_of(:email) }
   end
 
+  describe 'administrator membership protection' do
+    it 'does not delete a global user who still has an administrator membership' do
+      administrator = create(:user, account: create(:account), role: :administrator)
+
+      expect { administrator.destroy! }.to raise_error(ActiveRecord::RecordNotDestroyed)
+      expect(described_class.exists?(administrator.id)).to be(true)
+    end
+
+    it 'blocks global deletion for administrator links on suspended accounts' do
+      administrator = create(:user, account: create(:account), role: :administrator)
+      administrator.accounts.first.update!(status: :suspended)
+
+      expect { administrator.destroy! }.to raise_error(ActiveRecord::RecordNotDestroyed)
+      expect(described_class.exists?(administrator.id)).to be(true)
+    end
+  end
+
   context 'with associations' do
     it { is_expected.to have_many(:accounts).through(:account_users) }
     it { is_expected.to have_many(:account_users) }

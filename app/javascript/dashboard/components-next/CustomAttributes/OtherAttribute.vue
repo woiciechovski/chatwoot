@@ -19,6 +19,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  disabled: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const emit = defineEmits(['update', 'delete']);
@@ -126,7 +130,7 @@ const handleInputUpdate = async () => {
     }"
   >
     <span
-      v-if="!isEditingValue"
+      v-if="!isEditingValue || disabled"
       class="min-w-0 text-sm"
       :class="{
         'cursor-pointer text-n-slate-11 hover:text-n-slate-12 py-2 select-none font-medium':
@@ -135,7 +139,7 @@ const handleInputUpdate = async () => {
         'truncate hover:text-n-brand text-n-blue-11':
           isEditingView && isAttributeTypeLink,
       }"
-      @click="toggleEditValue(!isEditingView)"
+      @click="!disabled && toggleEditValue(!isEditingView)"
     >
       <a
         v-if="isAttributeTypeLink && attribute.value && isEditingView"
@@ -156,7 +160,7 @@ const handleInputUpdate = async () => {
     </span>
 
     <div
-      v-if="isEditingView && !isEditingValue"
+      v-if="isEditingView && !disabled && !isEditingValue"
       class="flex items-center gap-1"
     >
       <Button
@@ -178,7 +182,7 @@ const handleInputUpdate = async () => {
     </div>
 
     <div
-      v-if="isEditingValue"
+      v-if="isEditingValue && !disabled"
       v-on-clickaway="() => toggleEditValue(false)"
       class="flex items-center w-full"
     >
@@ -188,6 +192,7 @@ const handleInputUpdate = async () => {
         :type="getInputType"
         class="w-full [&>p]:absolute [&>p]:mt-0.5 [&>p]:top-8 ltr:[&>p]:left-0 rtl:[&>p]:right-0"
         autofocus
+        :disabled="disabled"
         :message="attributeErrorMessage"
         :message-type="hasError ? 'error' : 'info'"
         custom-input-class="h-8 ltr:rounded-r-none rtl:rounded-l-none"

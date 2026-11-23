@@ -12,6 +12,7 @@ export const mutations = {
   [types.CLEAR_CONTACTS]: $state => {
     $state.records = {};
     $state.sortOrder = [];
+    $state.meta = { count: 0, currentPage: 1, hasMore: false };
   },
 
   [types.SET_CONTACT_META]: ($state, data) => {
@@ -57,7 +58,20 @@ export const mutations = {
     }
   },
 
+  [types.CLEAR_CONTACT_ITEM]: ($state, id) => {
+    const deniedContactId = String(id);
+    delete $state.records[deniedContactId];
+    $state.sortOrder = $state.sortOrder.filter(
+      contactId => String(contactId) !== deniedContactId
+    );
+  },
+
   [types.EDIT_CONTACT]: ($state, data) => {
+    if (Object.keys(data).every(key => key === 'id')) {
+      $state.records[data.id] = { id: data.id };
+      return;
+    }
+
     const existingAttachments = $state.records[data.id]?.attachments;
     $state.records[data.id] = existingAttachments
       ? { ...data, attachments: existingAttachments }

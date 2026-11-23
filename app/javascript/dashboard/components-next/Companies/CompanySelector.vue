@@ -21,6 +21,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  disabled: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const emit = defineEmits(['select']);
@@ -139,6 +143,7 @@ const handleSelect = value => {
     :model-value="modelValue"
     :options="comboboxOptions"
     :display-label="selectedName"
+    :disabled="disabled"
     :placeholder="t('COMPANIES.SELECTOR.PLACEHOLDER')"
     :search-placeholder="t('COMPANIES.SEARCH_PLACEHOLDER')"
     use-api-results

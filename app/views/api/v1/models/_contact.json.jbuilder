@@ -7,7 +7,11 @@ json.phone_number resource.phone_number
 json.blocked resource.blocked
 json.identifier resource.identifier
 json.company_id resource.company_id if Current.account&.feature_enabled?('companies')
-json.thumbnail resource.avatar_url
+if Current.account.present? && resource.account_id == Current.account.id && resource.avatar.attached? && resource.avatar.representable?
+  json.thumbnail avatar_download_api_v1_account_contact_path(account_id: Current.account.id, id: resource.id)
+else
+  json.thumbnail ''
+end
 json.custom_attributes resource.custom_attributes
 json.last_activity_at resource.last_activity_at.to_i if resource[:last_activity_at].present?
 json.created_at resource.created_at.to_i if resource[:created_at].present?

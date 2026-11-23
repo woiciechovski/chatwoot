@@ -1,4 +1,6 @@
 class Api::V1::Accounts::Contacts::NotesController < Api::V1::Accounts::Contacts::BaseController
+  before_action :authorize_contact_read!, only: [:index, :show]
+  before_action :authorize_contact_update!, only: [:create, :update, :destroy]
   before_action :note, except: [:index, :create]
 
   def index
@@ -9,10 +11,12 @@ class Api::V1::Accounts::Contacts::NotesController < Api::V1::Accounts::Contacts
 
   def create
     @note = @contact.notes.create!(note_params)
+    head :no_content unless policy(@contact).show?
   end
 
   def update
     @note.update(note_params)
+    head :no_content unless policy(@contact).show?
   end
 
   def destroy

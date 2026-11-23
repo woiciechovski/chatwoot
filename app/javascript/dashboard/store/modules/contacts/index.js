@@ -19,6 +19,7 @@ const state = {
     isExporting: false,
     isImporting: false,
     isInitiatingCall: false,
+    fetchError: null,
   },
   sortOrder: [],
   appliedFilters: [],

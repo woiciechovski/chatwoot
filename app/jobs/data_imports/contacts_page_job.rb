@@ -1,6 +1,8 @@
 module DataImports::ContactsPageJob
   def perform(data_import, starting_after = nil, run_id = nil)
     return if skip_import?(data_import, run_id)
+    return fail_import!(Pundit::NotAuthorizedError.new('Data import authorization is no longer valid')) unless
+      DataImports::Authorization.new(data_import).allowed_to_run?
 
     importer = importer_for(data_import, run_id)
     return enqueue_conversations_or_finish(data_import, importer, run_id) if importer.contacts_completed?

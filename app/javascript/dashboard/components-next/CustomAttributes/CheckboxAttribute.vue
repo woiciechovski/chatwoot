@@ -13,6 +13,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  disabled: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const emit = defineEmits(['update', 'delete']);
@@ -32,9 +36,13 @@ const handleChange = value => {
       'justify-end': !isEditingView,
     }"
   >
-    <Switch v-model="attributeValue" @change="handleChange" />
+    <Switch
+      v-model="attributeValue"
+      :disabled="disabled"
+      @change="handleChange"
+    />
     <Button
-      v-if="isEditingView"
+      v-if="isEditingView && !disabled"
       variant="faded"
       color="ruby"
       icon="i-lucide-trash"

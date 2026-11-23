@@ -9,16 +9,22 @@ import { usePolicy } from 'dashboard/composables/usePolicy';
 const emit = defineEmits(['add', 'import', 'export']);
 
 const { t } = useI18n();
-const { checkPermissions } = usePolicy();
+const { checkContactPermission, checkContactPermissions } = usePolicy();
 
 const contactMenuItems = computed(() => [
-  {
-    label: t('CONTACTS_LAYOUT.HEADER.ACTIONS.CONTACT_CREATION.ADD_CONTACT'),
-    action: 'add',
-    value: 'add',
-    icon: 'i-lucide-plus',
-  },
-  ...(checkPermissions(['administrator', 'contact_manage'])
+  ...(checkContactPermission('contacts.create')
+    ? [
+        {
+          label: t(
+            'CONTACTS_LAYOUT.HEADER.ACTIONS.CONTACT_CREATION.ADD_CONTACT'
+          ),
+          action: 'add',
+          value: 'add',
+          icon: 'i-lucide-plus',
+        },
+      ]
+    : []),
+  ...(checkContactPermissions(['contacts.read', 'contacts.export'])
     ? [
         {
           label: t(
@@ -30,7 +36,7 @@ const contactMenuItems = computed(() => [
         },
       ]
     : []),
-  ...(checkPermissions(['administrator', 'contact_manage'])
+  ...(checkContactPermission('contacts.import')
     ? [
         {
           label: t(
@@ -58,19 +64,21 @@ const handleContactAction = ({ action }) => {
 
 <template>
   <div v-on-clickaway="() => (showActionsDropdown = false)" class="relative">
-    <Button
-      icon="i-lucide-ellipsis-vertical"
-      color="slate"
-      variant="ghost"
-      size="sm"
-      :class="showActionsDropdown ? 'bg-n-alpha-2' : ''"
-      @click="showActionsDropdown = !showActionsDropdown"
-    />
-    <DropdownMenu
-      v-if="showActionsDropdown"
-      :menu-items="contactMenuItems"
-      class="ltr:right-0 rtl:left-0 mt-1 w-52 top-full"
-      @action="handleContactAction($event)"
-    />
+    <template v-if="contactMenuItems.length">
+      <Button
+        icon="i-lucide-ellipsis-vertical"
+        color="slate"
+        variant="ghost"
+        size="sm"
+        :class="showActionsDropdown ? 'bg-n-alpha-2' : ''"
+        @click="showActionsDropdown = !showActionsDropdown"
+      />
+      <DropdownMenu
+        v-if="showActionsDropdown"
+        :menu-items="contactMenuItems"
+        class="ltr:right-0 rtl:left-0 mt-1 w-52 top-full"
+        @action="handleContactAction($event)"
+      />
+    </template>
   </div>
 </template>

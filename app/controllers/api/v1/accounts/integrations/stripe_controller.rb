@@ -30,9 +30,9 @@ class Api::V1::Accounts::Integrations::StripeController < Api::V1::Accounts::Int
 
     conversation = Current.account.conversations.find_by!(display_id: conversation_id)
     authorize conversation, :show?
+    authorize_contact_read!(conversation.contact)
     hook = Current.account.hooks.find_by!(app_id: 'stripe', status: :enabled)
-    render json: Integrations::Stripe::CustomerSummary.new(connection: Integrations::Stripe::Connection.new(hook),
-                                                           contact: conversation.contact).perform(customer_id: params[:customer_id])
+    render json: customer_summary(hook: hook, conversation: conversation)
   rescue Integrations::Stripe::Connection::ReauthorizationRequired, ::Stripe::AuthenticationError
     hook.prompt_reauthorization!
     render json: { error: 'stripe_reauthorization_required' }, status: :unprocessable_entity
@@ -44,6 +44,16 @@ class Api::V1::Accounts::Integrations::StripeController < Api::V1::Accounts::Int
   end
 
   private
+
+  def authorize_contact_read!(contact)
+    authorize contact, :show?
+  end
+
+  def customer_summary(hook:, conversation:)
+    connection = Integrations::Stripe::Connection.new(hook)
+    Integrations::Stripe::CustomerSummary.new(connection: connection, contact: conversation.contact)
+                                         .perform(customer_id: params[:customer_id])
+  end
 
   def render_customer_failure(error)
     details = { error: error.class.name }

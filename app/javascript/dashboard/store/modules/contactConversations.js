@@ -2,6 +2,10 @@ import * as types from '../mutation-types';
 import ContactAPI from '../../api/contacts';
 import ConversationApi from '../../api/conversations';
 import camelcaseKeys from 'camelcase-keys';
+import {
+  clearContactReadCaches,
+  isContactReadDenied,
+} from './contactReadCache';
 
 export const createMessagePayload = (payload, message) => {
   const { content, cc_emails, bcc_emails } = message;
@@ -135,6 +139,7 @@ export const actions = {
         isFetching: false,
       });
     } catch (error) {
+      if (isContactReadDenied(error)) clearContactReadCaches(commit);
       commit(types.default.SET_CONTACT_CONVERSATIONS_UI_FLAG, {
         isFetching: false,
       });
@@ -150,7 +155,7 @@ export const actions = {
         data: data.payload,
       });
     } catch (error) {
-      // The links stay hidden when the neighbours cannot be resolved.
+      if (isContactReadDenied(error)) clearContactReadCaches(commit);
     }
   },
 };
@@ -190,6 +195,12 @@ export const mutations = {
   [types.default.DELETE_CONTACT_CONVERSATION]: ($state, id) => {
     const { [id]: deletedRecord, ...remainingRecords } = $state.records;
     $state.records = remainingRecords;
+  },
+  [types.default.CLEAR_ALL_CONTACT_CONVERSATIONS]: $state => {
+    $state.records = {};
+  },
+  [types.default.CLEAR_ALL_CONVERSATION_NEIGHBOURS]: $state => {
+    $state.neighbours = {};
   },
   [types.default.SET_CONVERSATION_NEIGHBOURS]: ($state, { id, data }) => {
     $state.neighbours = {

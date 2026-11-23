@@ -42,6 +42,17 @@ class ContactAPI extends ApiClient {
     });
   }
 
+  getCapabilities(accountId) {
+    return axios.get(
+      `${this.apiVersion}/accounts/${accountId}/rbac/me/capabilities`
+    );
+  }
+
+  fetchProtectedMedia(url) {
+    const requestUrl = url.replace(/^\/api\/v\d+/, this.apiVersion);
+    return axios.get(requestUrl, { responseType: 'blob' });
+  }
+
   getContactableInboxes(contactId) {
     return axios.get(`${this.url}/${contactId}/contactable_inboxes`);
   }

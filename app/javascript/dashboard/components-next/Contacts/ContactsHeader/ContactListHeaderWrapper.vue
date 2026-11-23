@@ -49,7 +49,7 @@ const emit = defineEmits([
 ]);
 
 const { t } = useI18n();
-const { checkPermissions } = usePolicy();
+const { checkContactPermission } = usePolicy();
 const store = useStore();
 const router = useRouter();
 
@@ -275,12 +275,18 @@ defineExpose({
 });
 
 usePageCommands(() => [
-  {
-    id: 'new_contact',
-    title: t('CONTACTS_LAYOUT.HEADER.ACTIONS.CONTACT_CREATION.ADD_CONTACT'),
-    run: openCreateNewContactDialog,
-  },
-  ...(checkPermissions(['administrator', 'contact_manage'])
+  ...(checkContactPermission('contacts.create')
+    ? [
+        {
+          id: 'new_contact',
+          title: t(
+            'CONTACTS_LAYOUT.HEADER.ACTIONS.CONTACT_CREATION.ADD_CONTACT'
+          ),
+          run: openCreateNewContactDialog,
+        },
+      ]
+    : []),
+  ...(checkContactPermission('contacts.import')
     ? [
         {
           id: 'import_contacts',

@@ -15,6 +15,7 @@ import ContactsList from 'dashboard/components-next/Contacts/Pages/ContactsList.
 import ContactsBulkActionBar from '../components/ContactsBulkActionBar.vue';
 import Dialog from 'dashboard/components-next/dialog/Dialog.vue';
 import BulkActionsAPI from 'dashboard/api/bulkActions';
+import { usePolicy } from 'dashboard/composables/usePolicy';
 
 // Only order backed by index_contacts_on_account_id_and_last_activity_at
 const DEFAULT_SORT = '-last_activity_at';
@@ -26,6 +27,7 @@ const router = useRouter();
 const { t } = useI18n();
 
 const { updateUISettings, uiSettings } = useUISettings();
+const { checkContactPermission } = usePolicy();
 
 const contacts = useMapGetter('contacts/getContactsList');
 const uiFlags = useMapGetter('contacts/getUIFlags');
@@ -64,6 +66,7 @@ const activeSegmentId = computed(() => route.params.segmentId);
 const isFetchingList = computed(
   () => uiFlags.value.isFetching || customViewsUiFlags.value.isFetching
 );
+const contactFetchError = computed(() => uiFlags.value.fetchError);
 const currentPage = computed(() => Number(meta.value?.currentPage));
 const totalItems = computed(() => meta.value?.count);
 const hasMore = computed(() => meta.value?.hasMore ?? false);
@@ -136,6 +139,14 @@ const emptyStateMessage = computed(() => {
   if (!searchQuery.value || hasAppliedFilters.value)
     return t('CONTACTS_LAYOUT.EMPTY_STATE.LIST_EMPTY_STATE_TITLE');
   return t('CONTACTS_LAYOUT.EMPTY_STATE.SEARCH_EMPTY_STATE_TITLE');
+});
+
+watch(contactFetchError, error => {
+  if (error) {
+    useAlert(
+      typeof error === 'string' ? error : t('CONVERSATION.MESSAGE_ERROR')
+    );
+  }
 });
 
 const visibleContactIds = computed(() =>
@@ -543,6 +554,7 @@ onMounted(async () => {
         <ContactEmptyState
           v-if="showEmptyStateLayout"
           class="pt-14"
+          :show-button="checkContactPermission('contacts.create')"
           :title="t('CONTACTS_LAYOUT.EMPTY_STATE.TITLE')"
           :subtitle="t('CONTACTS_LAYOUT.EMPTY_STATE.SUBTITLE')"
           :button-label="t('CONTACTS_LAYOUT.EMPTY_STATE.BUTTON_LABEL')"

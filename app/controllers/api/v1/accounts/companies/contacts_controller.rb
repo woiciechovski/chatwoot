@@ -9,8 +9,10 @@ class Api::V1::Accounts::Companies::ContactsController < Api::V1::Accounts::Comp
 
   before_action :authorize_company_read!, only: [:index, :search]
   before_action :authorize_company_update!, only: [:create, :destroy]
+  before_action :authorize_contacts_read!, only: [:index, :search]
   before_action :set_current_page, only: [:index, :search]
   before_action :fetch_contact, only: [:destroy]
+  before_action :authorize_contact_update!, only: [:destroy]
 
   def index
     contacts = @company.contacts.order(:name, :id)
@@ -31,6 +33,7 @@ class Api::V1::Accounts::Companies::ContactsController < Api::V1::Accounts::Comp
 
   def create
     @contact = Current.account.contacts.find(params[:contact_id])
+    authorize @contact, :update?
     membership_service.assign(contact: @contact)
   end
 
@@ -65,5 +68,13 @@ class Api::V1::Accounts::Companies::ContactsController < Api::V1::Accounts::Comp
 
   def membership_service
     @membership_service ||= Companies::ContactMembershipService.new(company: @company)
+  end
+
+  def authorize_contacts_read!
+    authorize Contact, :index?
+  end
+
+  def authorize_contact_update!
+    authorize @contact, :update?
   end
 end

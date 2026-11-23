@@ -1,4 +1,6 @@
 class SearchService
+  include ResourceFilters
+
   pattr_initialize [:current_user!, :current_account!, :params!, :search_type!]
 
   def account_user
@@ -16,11 +18,21 @@ class SearchService
     when 'Article'
       { articles: filter_articles }
     else
-      { contacts: filter_contacts, messages: filter_messages, conversations: filter_conversations, articles: filter_articles }
+      search_all
     end
   end
 
   private
+
+  def search_all
+    results = { messages: filter_messages, conversations: filter_conversations, articles: filter_articles }
+    results[:contacts] = filter_contacts if Contacts::Authorization.allowed?(
+      account: current_account,
+      user_id: current_user.id,
+      permission: 'contacts.read'
+    )
+    results
+  end
 
   def accessable_inbox_ids
     @accessable_inbox_ids ||= @current_user.assigned_inboxes.pluck(:id)
@@ -179,26 +191,6 @@ class SearchService
 
   def use_gin_search
     current_account.feature_enabled?('search_with_gin')
-  end
-
-  def filter_contacts
-    contacts_query = current_account.contacts.where(
-      "name ILIKE :search OR email ILIKE :search OR phone_number
-      ILIKE :search OR identifier ILIKE :search", search: "%#{search_query}%"
-    )
-
-    contacts_query = apply_time_filter(contacts_query, 'last_activity_at') if current_account.feature_enabled?('advanced_search')
-
-    @contacts = contacts_query.resolved_contacts(
-      use_crm_v2: current_account.feature_enabled?('crm_v2')
-    ).order_on_last_activity_at('desc').page(params[:page]).per(15)
-  end
-
-  def filter_articles
-    articles_query = current_account.articles.text_search(search_query)
-    articles_query = apply_time_filter(articles_query, 'updated_at') if current_account.feature_enabled?('advanced_search')
-
-    @articles = articles_query.page(params[:page]).per(15)
   end
 
   def apply_time_filter(query, column_name)

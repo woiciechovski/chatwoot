@@ -4,7 +4,7 @@ RSpec.describe Account::ContactsExportJob do
   subject(:job) { described_class.perform_later(account.id, user.id, [], {}) }
 
   let(:account) { create(:account) }
-  let(:user) { create(:user, account: account, email: 'account-user-test@test.com') }
+  let(:user) { create(:user, :administrator, account: account, email: 'account-user-test@test.com') }
 
   let(:email_filter) do
     {
@@ -40,9 +40,52 @@ RSpec.describe Account::ContactsExportJob do
     }
   end
 
+  def manage_user_with_permissions(account, user, *permission_keys)
+    role = RbacRole.create!(account: account, name: "Contacts export #{SecureRandom.hex(4)}")
+    permission_keys.each do |permission_key|
+      role.role_permissions.create!(permission_key: permission_key, scope_type: 'all_in_account')
+    end
+    account.account_users.find_by!(user: user).update!(rbac_managed: true, rbac_role: role)
+  end
+
   it 'enqueues the job' do
     expect { job }.to have_enqueued_job(described_class)
       .on_queue('low')
+  end
+
+  it 'does not process an export for a managed agent with contacts.export but no contacts.read' do
+    managed_agent = create(:user, account: account, role: :agent, email: 'managed-export@test.com')
+    manage_user_with_permissions(account, managed_agent, 'contacts.export')
+    create(:contact, account: account, email: 'must-not-export@example.com')
+
+    described_class.perform_now(account.id, managed_agent.id, %w[id email], {})
+
+    expect(account.contacts_export).not_to be_attached
+  end
+
+  it 'processes an export for a managed agent with contacts.read and contacts.export' do
+    managed_agent = create(:user, account: account, role: :agent, email: 'managed-export@test.com')
+    manage_user_with_permissions(account, managed_agent, 'contacts.read', 'contacts.export')
+    create(:contact, account: account, email: 'authorized-export@example.com')
+
+    described_class.perform_now(account.id, managed_agent.id, %w[id email], {})
+
+    csv_content = account.contacts_export.download.force_encoding('UTF-8')
+
+    expect(account.contacts_export).to be_attached
+    expect(csv_content).to include('authorized-export@example.com')
+  end
+
+  it 'rechecks contacts.read in the worker after it is revoked' do
+    managed_agent = create(:user, account: account, role: :agent, email: 'managed-export@test.com')
+    manage_user_with_permissions(account, managed_agent, 'contacts.read', 'contacts.export')
+    role = account.account_users.find_by!(user: managed_agent).rbac_role
+    role.role_permissions.find_by!(permission_key: 'contacts.read').destroy!
+    create(:contact, account: account, email: 'revoked-read@example.com')
+
+    described_class.perform_now(account.id, managed_agent.id, %w[id email], {})
+
+    expect(account.contacts_export).not_to be_attached
   end
 
   context 'when export_contacts' do
@@ -64,11 +107,35 @@ RSpec.describe Account::ContactsExportJob do
 
       described_class.perform_now(account.id, user.id, [], {})
 
-      file_url = Rails.application.routes.url_helpers.rails_blob_url(account.contacts_export)
+      file_url = Rails.application.routes.url_helpers.export_download_api_v1_account_contacts_url(
+        account_id: account.id
+      )
 
       expect(account.contacts_export).to be_present
-      expect(file_url).to be_present
+      expect(file_url).to include("/api/v1/accounts/#{account.id}/contacts/export/download")
       expect(mailer).to have_received(:contact_export_complete).with(file_url, user.email)
+    end
+
+    it 'stops before the next batch and does not publish the export after permission revocation' do
+      101.times { |index| create(:contact, account: account, email: "batch-#{index}@text.example") }
+      allow(Contacts::Authorization).to receive(:allowed?).and_return(true, true, false)
+      mailer = double
+      allow(AdministratorNotifications::AccountNotificationMailer).to receive(:with).and_return(mailer)
+      allow(mailer).to receive(:contact_export_complete)
+
+      described_class.perform_now(account.id, user.id, %w[id email], {})
+
+      expect(account.contacts_export).not_to be_attached
+      expect(mailer).not_to have_received(:contact_export_complete)
+    end
+
+    it 'does not export after its account membership is removed' do
+      create(:user, :administrator, account: account)
+      account.account_users.find_by!(user: user).destroy!
+
+      described_class.perform_now(account.id, user.id, %w[id email], {})
+
+      expect(account.contacts_export).not_to be_attached
     end
 
     it 'generates valid data export file' do

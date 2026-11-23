@@ -10,11 +10,14 @@ class ActionCableBroadcastJob < ApplicationJob
     CONVERSATION_STATUS_CHANGED
   ].freeze
 
+  CONTACT_EVENTS = [CONTACT_CREATED, CONTACT_UPDATED, CONTACT_MERGED, CONTACT_DELETED].freeze
+
   def perform(members, event_name, data)
     return if members.blank?
 
     broadcast_data = prepare_broadcast_data(event_name, data)
     members = members_with_current_conversation_access(members, event_name, data)
+    members = members_with_current_contacts_read_access(members, event_name, data)
     return if members.blank?
 
     broadcast_to_members(members, event_name, broadcast_data)
@@ -58,6 +61,23 @@ class ActionCableBroadcastJob < ApplicationJob
     administrator_tokens = account.administrators.where(pubsub_token: members).pluck(:pubsub_token)
 
     (other_tokens + recipient_user_tokens + administrator_tokens).uniq
+  end
+
+  def members_with_current_contacts_read_access(members, event_name, data)
+    return members unless CONTACT_EVENTS.include?(event_name)
+
+    account = Account.find_by(id: data[:account_id])
+    return [] if account.blank?
+
+    tokens_by_user_id = User.where(pubsub_token: members).pluck(:id, :pubsub_token).to_h
+    account_users = account.account_users.where(user_id: tokens_by_user_id.keys)
+    account_users = account_users.includes(rbac_role: :role_permissions)
+
+    account_users.filter_map do |account_user|
+      next unless Rbac::Authorizer.allowed?(account_user: account_user, permission: 'contacts.read')
+
+      tokens_by_user_id[account_user.user_id]
+    end
   end
 
   def visible_user_tokens_for(conversation)

@@ -7,7 +7,8 @@ class Api::V1::Accounts::BulkActionsController < Api::V1::Accounts::BaseControll
       enqueue_conversation_job
       head :ok
     when 'Contact'
-      check_authorization_for_contact_action
+      return unless check_authorization_for_contact_action
+
       enqueue_contact_job
       head :ok
     else
@@ -55,7 +56,20 @@ class Api::V1::Accounts::BulkActionsController < Api::V1::Accounts::BaseControll
   end
 
   def check_authorization_for_contact_action
-    authorize(Contact, :destroy?) if delete_contact_action?
+    if delete_contact_action?
+      authorize Contact, :destroy?
+    elsif contact_label_action?
+      authorize Contact, :update?
+    else
+      render json: { success: false }, status: :unprocessable_entity
+      return false
+    end
+
+    true
+  end
+
+  def contact_label_action?
+    params.dig(:labels, :add).present? || params.dig(:labels, :remove).present?
   end
 
   def conversation_params

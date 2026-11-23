@@ -48,6 +48,41 @@ RSpec.describe ActionCableBroadcastJob do
     described_class.perform_now([unrelated_agent.pubsub_token], 'notification.updated', event_data)
   end
 
+  it 'rechecks contacts.read before broadcasting queued contact events' do
+    managed_reader = create(:user, account: account, role: :agent)
+    managed_without_read = create(:user, account: account, role: :agent)
+    reader_role = RbacRole.create!(account: account, name: 'Contact event reader')
+    reader_role.role_permissions.create!(permission_key: 'contacts.read', scope_type: 'all_in_account')
+    managed_reader.account_users.find_by!(account: account).update!(rbac_managed: true, rbac_role: reader_role)
+    managed_without_read.account_users.find_by!(account: account).update!(rbac_managed: true)
+
+    expect(ActionCable.server).to receive(:broadcast).with(admin.pubsub_token, anything)
+    expect(ActionCable.server).to receive(:broadcast).with(managed_reader.pubsub_token, anything)
+    expect(ActionCable.server).not_to receive(:broadcast).with(managed_without_read.pubsub_token, anything)
+
+    described_class.perform_now(
+      [admin.pubsub_token, managed_reader.pubsub_token, managed_without_read.pubsub_token],
+      'contact.updated',
+      { account_id: account.id, id: 42 }
+    )
+  end
+
+  it 'honors a contacts.read revocation before delivering an already queued event' do
+    managed_reader = create(:user, account: account, role: :agent)
+    reader_role = RbacRole.create!(account: account, name: 'Revoked contact event reader')
+    permission = reader_role.role_permissions.create!(permission_key: 'contacts.read', scope_type: 'all_in_account')
+    managed_reader.account_users.find_by!(account: account).update!(rbac_managed: true, rbac_role: reader_role)
+    permission.destroy!
+
+    expect(ActionCable.server).not_to receive(:broadcast).with(managed_reader.pubsub_token, anything)
+
+    described_class.perform_now(
+      [managed_reader.pubsub_token],
+      'contact.updated',
+      { account_id: account.id, id: 42 }
+    )
+  end
+
   it 'keeps a queued conversation broadcast admin-only if Flow Manager reserves it before delivery' do
     flow = create(:conversation_flow, account: account, enabled: true)
     ConversationFlowExecution.create!(

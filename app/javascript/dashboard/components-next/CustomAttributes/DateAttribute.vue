@@ -16,6 +16,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  disabled: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const emit = defineEmits(['update', 'delete']);
@@ -83,20 +87,20 @@ const handleInputUpdate = async () => {
     }"
   >
     <span
-      v-if="!isEditingValue"
+      v-if="!isEditingValue || disabled"
       class="min-w-0 text-sm"
       :class="{
         'cursor-pointer text-n-slate-11 hover:text-n-slate-12 py-2 select-none font-medium':
           !isEditingView,
         'text-n-slate-12 truncate': isEditingView,
       }"
-      @click="toggleEditValue(!isEditingView)"
+      @click="!disabled && toggleEditValue(!isEditingView)"
     >
       {{ formattedDate }}
     </span>
 
     <div
-      v-if="isEditingView && !isEditingValue"
+      v-if="isEditingView && !disabled && !isEditingValue"
       class="flex items-center gap-1"
     >
       <Button
@@ -118,7 +122,7 @@ const handleInputUpdate = async () => {
     </div>
 
     <div
-      v-if="isEditingValue"
+      v-if="isEditingValue && !disabled"
       v-on-clickaway="() => toggleEditValue(false)"
       class="flex items-center w-full"
     >
@@ -133,6 +137,7 @@ const handleInputUpdate = async () => {
         "
         :message-type="hasError ? 'error' : 'info'"
         autofocus
+        :disabled="disabled"
         custom-input-class="h-8 ltr:rounded-r-none rtl:rounded-l-none"
         @enter="handleInputUpdate"
       />

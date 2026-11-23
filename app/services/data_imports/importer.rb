@@ -52,11 +52,14 @@ class DataImports::Importer
 
   def start!
     return if @data_import.reload.abandoned?
+    return fail_import_authorization unless import_authorized?
 
     @data_import.update!(status: :processing, started_at: @data_import.started_at || Time.current)
   end
 
   def finish!
+    return fail_import_authorization unless import_authorized?
+
     @data_import.with_lock do
       next if @data_import.abandoned? || stale_import_run?
 
@@ -83,12 +86,19 @@ class DataImports::Importer
   end
 
   def import_contacts_page(starting_after: cursor_for('contacts'))
+    return fail_import_authorization unless import_authorized?
+
     response = @source.list_contacts(starting_after: starting_after, per_page: @source.contacts_per_page)
     update_stat_total('contacts', response['total_count']) if response['total_count'].present?
-    Array(response['data'] || response['contacts']).each do |contact|
-      break if import_stopped?
+    Array(response['data'] || response['contacts']).each_slice(100) do |contacts|
+      return fail_import_authorization unless import_authorized?
 
-      import_contact(contact)
+      contacts.each do |contact|
+        break if import_stopped?
+
+        import_contact(contact)
+      end
+      break if import_stopped?
     end
     return PageResult.new(next_cursor: nil) if import_stopped?
 
@@ -99,12 +109,19 @@ class DataImports::Importer
   end
 
   def import_conversations_page(starting_after: cursor_for('conversations'))
+    return fail_import_authorization unless import_authorized?
+
     response = @source.list_conversations(starting_after: starting_after, per_page: @source.conversations_per_page)
     update_stat_total('conversations', response['total_count']) if response['total_count'].present?
-    Array(response['data'] || response['conversations']).each do |conversation_summary|
-      break if import_stopped?
+    Array(response['data'] || response['conversations']).each_slice(100) do |conversations|
+      return fail_import_authorization unless import_authorized?
 
-      import_conversation_from_summary(conversation_summary)
+      conversations.each do |conversation_summary|
+        break if import_stopped?
+
+        import_conversation_from_summary(conversation_summary)
+      end
+      break if import_stopped?
     end
     return PageResult.new(next_cursor: nil) if import_stopped?
 
@@ -214,11 +231,22 @@ class DataImports::Importer
     return true if @import_stopped
 
     @data_import.reload
-    @import_stopped = @data_import.abandoned? || @data_import.completed? || @data_import.completed_with_errors? || stale_import_run?
+    @import_stopped = @data_import.abandoned? || @data_import.failed? || @data_import.completed? ||
+                      @data_import.completed_with_errors? || stale_import_run?
+  end
+
+  def import_authorized?
+    DataImports::Authorization.new(@data_import).allowed_to_run?
+  end
+
+  def fail_import_authorization
+    fail!(Pundit::NotAuthorizedError.new('Data import authorization is no longer valid'))
+    false
   end
 
   def continue_import_with_heartbeat?
     return false if import_stopped?
+    return fail_import_authorization unless import_authorized?
     return true if @data_import.updated_at > HEARTBEAT_INTERVAL.ago
 
     @data_import.touch if @data_import.updated_at <= HEARTBEAT_INTERVAL.ago

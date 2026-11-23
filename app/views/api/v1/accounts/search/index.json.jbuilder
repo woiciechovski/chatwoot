@@ -4,9 +4,11 @@ json.payload do
       json.partial! 'conversation_search_result', formats: [:json], conversation: conversation
     end
   end
-  json.contacts do
-    json.array! @result[:contacts] do |contact|
-      json.partial! 'contact', formats: [:json], contact: contact
+  if @result.key?(:contacts)
+    json.contacts do
+      json.array! @result[:contacts] do |contact|
+        json.partial! 'contact', formats: [:json], contact: contact
+      end
     end
   end
   json.messages do

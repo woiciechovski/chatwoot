@@ -1,5 +1,7 @@
 class Api::V1::Accounts::ContactsController < Api::V1::Accounts::BaseController
   include Sift
+  include Contacts::CompanyAssociationAuthorization
+  include Contacts::Listing
   sort_on :email, type: :string
   sort_on :name, internal_name: :order_on_name, type: :scope, scope_params: [:direction]
   sort_on :phone_number, type: :string
@@ -14,6 +16,7 @@ class Api::V1::Accounts::ContactsController < Api::V1::Accounts::BaseController
   before_action :check_authorization
   before_action :set_current_page, only: [:index, :active, :search, :filter]
   before_action :fetch_contact, only: [:show, :update, :destroy, :avatar, :contactable_inboxes, :destroy_custom_attributes]
+  before_action :authorize_contact_company_changes!, only: [:update]
   before_action :set_include_contact_inboxes, only: [:index, :active, :search, :filter, :show, :update]
 
   def index
@@ -35,7 +38,7 @@ class Api::V1::Accounts::ContactsController < Api::V1::Accounts::BaseController
     render json: { error: I18n.t('errors.contacts.import.failed') }, status: :unprocessable_entity and return if params[:import_file].blank?
 
     ActiveRecord::Base.transaction do
-      import = Current.account.data_imports.create!(data_type: 'contacts')
+      import = Current.account.data_imports.create!(data_type: 'contacts', initiated_by: Current.user)
       import.import_file.attach(params[:import_file])
     end
 
@@ -80,24 +83,28 @@ class Api::V1::Accounts::ContactsController < Api::V1::Accounts::BaseController
   def destroy_custom_attributes
     @contact.custom_attributes = @contact.custom_attributes.excluding(params[:custom_attributes])
     @contact.save!
+    render_contact_response
   end
 
   def create
     ActiveRecord::Base.transaction do
       @contact = Current.account.contacts.new(permitted_params.except(:avatar_url).merge(contact_type: :lead))
+      @contact.avatar_authorization_context = contact_avatar_authorization_context('contacts.create')
+      authorize_contact_company_changes!(@contact, creating: true)
       @contact.save!
       @contact_inbox = build_contact_inbox
-      process_avatar_from_url
+      process_avatar_from_url('contacts.create')
     end
   end
 
   def update
     ActiveRecord::Base.transaction do
+      @contact.avatar_authorization_context = contact_avatar_authorization_context('contacts.update')
       @contact.assign_attributes(contact_update_params)
       Contacts::CompanyAssociationService.new.associate_company_from_name(@contact) if params[:resolve_legacy_company].to_s == 'true'
       @contact.save!
     end
-    process_avatar_from_url
+    process_avatar_from_url('contacts.update')
   end
 
   def destroy
@@ -114,53 +121,10 @@ class Api::V1::Accounts::ContactsController < Api::V1::Accounts::BaseController
 
   def avatar
     @contact.avatar.purge if @contact.avatar.attached?
-    @contact
+    render_contact_response
   end
 
   private
-
-  # TODO: Move this to a finder class
-  def resolved_contacts
-    return @resolved_contacts if @resolved_contacts
-
-    @resolved_contacts = Current.account.contacts.resolved_contacts(use_crm_v2: Current.account.feature_enabled?('crm_v2'))
-
-    @resolved_contacts = @resolved_contacts.tagged_with(params[:labels], any: true) if params[:labels].present?
-    @resolved_contacts
-  end
-
-  def set_current_page
-    @current_page = params[:page] || 1
-  end
-
-  def fetch_contacts(contacts)
-    # Build includes hash to avoid separate query when contact_inboxes are needed
-    includes_hash = { avatar_attachment: [:blob] }
-    includes_hash[:contact_inboxes] = { inbox: :channel } if @include_contact_inboxes
-
-    filtrate(contacts)
-      .includes(includes_hash)
-      .page(@current_page)
-      .per(RESULTS_PER_PAGE)
-  end
-
-  def fetch_contacts_with_has_more(contacts)
-    includes_hash = { avatar_attachment: [:blob] }
-    includes_hash[:contact_inboxes] = { inbox: :channel } if @include_contact_inboxes
-
-    # Calculate offset manually to fetch one extra record for has_more check
-    offset = (@current_page.to_i - 1) * RESULTS_PER_PAGE
-    results = filtrate(contacts)
-              .includes(includes_hash)
-              .offset(offset)
-              .limit(RESULTS_PER_PAGE + 1)
-              .to_a
-
-    @has_more = results.size > RESULTS_PER_PAGE
-    results = results.first(RESULTS_PER_PAGE) if @has_more
-    @contacts_count = results.size
-    results
-  end
 
   def build_contact_inbox
     return if params[:inbox_id].blank?
@@ -200,26 +164,36 @@ class Api::V1::Accounts::ContactsController < Api::V1::Accounts::BaseController
                     .merge({ additional_attributes: contact_additional_attributes })
   end
 
-  def set_include_contact_inboxes
-    @include_contact_inboxes = if params[:include_contact_inboxes].present?
-                                 params[:include_contact_inboxes] == 'true'
-                               else
-                                 true
-                               end
-  end
-
   def fetch_contact
     contact_scope = Current.account.contacts
     contact_scope = contact_scope.includes(contact_inboxes: [:inbox]) if @include_contact_inboxes
     @contact = contact_scope.find(params[:id])
   end
 
-  def process_avatar_from_url
-    ::Avatar::AvatarFromUrlJob.perform_later(@contact, params[:avatar_url]) if params[:avatar_url].present?
+  def process_avatar_from_url(permission)
+    return if params[:avatar_url].blank?
+
+    ::Avatar::AvatarFromUrlJob.perform_later(
+      @contact,
+      params[:avatar_url],
+      contact_avatar_authorization_context(permission)
+    )
+  end
+
+  def contact_avatar_authorization_context(permission)
+    Contacts::Authorization.user_avatar_context(
+      account_user: Current.account_user,
+      contact: @contact,
+      permission: permission
+    )
   end
 
   def render_error(error, error_status)
     render json: error, status: error_status
+  end
+
+  def render_contact_response
+    render json: { id: @contact.id } unless policy(@contact).show?
   end
 end
 

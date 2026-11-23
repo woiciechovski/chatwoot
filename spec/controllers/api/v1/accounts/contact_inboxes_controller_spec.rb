@@ -4,7 +4,7 @@ RSpec.describe 'Contact Inboxes API', type: :request do
   let(:account) { create(:account) }
 
   let(:inbox) { create(:inbox, account: account) }
-  let(:contact) { create(:contact, account: account) }
+  let(:contact) { create(:contact, account: account, email: 'contact-inbox@example.com') }
   let!(:contact_inbox) { create(:contact_inbox, contact: contact, inbox: inbox) }
 
   describe 'POST /api/v1/accounts/{account.id}/contact_inboxes/filter' do
@@ -65,6 +65,19 @@ RSpec.describe 'Contact Inboxes API', type: :request do
              as: :json
 
         expect(response).to have_http_status(:success)
+      end
+
+      it 'requires contacts.read when the agent is managed by RBAC' do
+        account_user = account.account_users.find_by!(user: agent_with_inbox_access)
+        account_user.update!(rbac_managed: true, rbac_role: nil)
+
+        post "/api/v1/accounts/#{account.id}/contact_inboxes/filter",
+             headers: agent_with_inbox_access.create_new_auth_token,
+             params: { inbox_id: inbox.id, source_id: contact_inbox.source_id },
+             as: :json
+
+        expect(response).to have_http_status(:unauthorized)
+        expect(response.body).not_to include(contact.email)
       end
     end
   end

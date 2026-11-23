@@ -103,6 +103,16 @@ RSpec.describe 'Stripe Integration API', type: :request do
     expect(response).to have_http_status(:ok)
   end
 
+  it 'requires contacts.read before returning customer billing details' do
+    create(:inbox_member, inbox: conversation.inbox, user: agent)
+    agent.account_users.find_by!(account: account).update!(rbac_managed: true)
+    expect(Integrations::Stripe::CustomerSummary).not_to receive(:new)
+
+    get "#{path}/customer", params: { conversation_id: conversation.display_id }, headers: agent.create_new_auth_token
+
+    expect(response).to have_http_status(:unauthorized)
+  end
+
   it 'does not look up a conversation in another account' do
     other = create(:conversation)
     get "#{path}/customer", params: { conversation_id: other.display_id }, headers: admin.create_new_auth_token

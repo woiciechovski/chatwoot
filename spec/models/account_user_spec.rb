@@ -8,6 +8,24 @@ RSpec.describe AccountUser do
   let!(:account_user) { create(:account_user) }
   let!(:inbox) { create(:inbox, account: account_user.account) }
 
+  describe 'teardown after parent deletion' do
+    it 'allows async membership cleanup after account and user rows are gone' do
+      account_user = create(:account_user)
+      account = account_user.account
+      user = account_user.user
+
+      account.delete
+      user.delete
+      expect(Account.exists?(account.id)).to be(false)
+      expect(User.exists?(user.id)).to be(false)
+      account_user.association(:account).reset
+      account_user.association(:user).reset
+
+      expect { account_user.destroy! }.not_to have_enqueued_job(Agents::DestroyJob)
+      expect(described_class.exists?(account_user.id)).to be(false)
+    end
+  end
+
   describe 'notification_settings' do
     it 'gets created with the right default settings' do
       expect(account_user.user.notification_settings).not_to be_nil
@@ -36,6 +54,104 @@ RSpec.describe AccountUser do
     it 'returns the right permissions for administrator' do
       account_user.administrator!
       expect(account_user.permissions).to eq(['administrator'])
+    end
+  end
+
+  describe 'RBAC role assignment' do
+    it 'keeps new account links in legacy mode' do
+      expect(account_user.rbac_managed).to be(false)
+      expect(account_user.rbac_role).to be_nil
+    end
+
+    it 'marks a link as RBAC-managed when a role is assigned and keeps it managed after removal' do
+      role = RbacRole.create!(account: account_user.account, name: 'Support')
+
+      account_user.update!(rbac_role: role)
+      expect(account_user.reload.rbac_managed).to be(true)
+
+      account_user.update!(rbac_role: nil)
+      expect(account_user.reload.rbac_role).to be_nil
+      expect(account_user.rbac_managed).to be(true)
+    end
+
+    it 'rejects a role owned by another account' do
+      role = RbacRole.create!(account: create(:account), name: 'Support')
+
+      expect(account_user.update(rbac_role: role)).to be(false)
+      expect(account_user.errors[:rbac_role]).to be_present
+    end
+
+    it 'rejects cross-account role references at the database boundary' do
+      role = RbacRole.create!(account: create(:account), name: 'Support')
+
+      expect do
+        # Bypass model validation to exercise the composite tenant foreign key itself.
+        # rubocop:disable Rails/SkipsModelValidations
+        account_user.update_columns(rbac_role_id: role.id, rbac_managed: true)
+        # rubocop:enable Rails/SkipsModelValidations
+      end.to raise_error(ActiveRecord::InvalidForeignKey)
+    end
+
+    it 'does not allow an RBAC-managed link to return to legacy mode' do
+      account_user.update!(rbac_managed: true)
+
+      expect(account_user.update(rbac_managed: false)).to be(false)
+      expect(account_user.errors[:rbac_managed]).to be_present
+    end
+
+    it 'allows unrelated membership updates after an assigned role is deactivated' do
+      role = RbacRole.create!(account: account_user.account, name: 'Support')
+      account_user.update!(rbac_role: role)
+      role.update!(active: false)
+
+      expect(account_user.update(availability: :offline)).to be(true)
+    end
+
+    it 'does not allow a native administrator to receive an RBAC role' do
+      administrator = create(:account_user, account: account_user.account, role: :administrator)
+      role = RbacRole.create!(account: account_user.account, name: 'Support')
+
+      expect(administrator.update(rbac_role: role)).to be(false)
+      expect(administrator.errors[:rbac_role]).to be_present
+    end
+  end
+
+  describe 'last administrator protection' do
+    let(:administrator) { create(:account_user, account: account_user.account, role: :administrator) }
+
+    it 'prevents demoting the last administrator' do
+      expect(administrator.update(role: :agent)).to be(false)
+      expect(administrator.errors[:role]).to include(I18n.t('errors.account_user.last_administrator'))
+      expect(administrator.reload).to be_administrator
+    end
+
+    it 'prevents removing the last administrator' do
+      expect { administrator.destroy! }.to raise_error(ActiveRecord::RecordNotDestroyed)
+
+      expect(described_class.exists?(administrator.id)).to be(true)
+    end
+
+    it 'allows demotion while another administrator remains' do
+      create(:account_user, account: administrator.account, role: :administrator)
+
+      expect(administrator.update!(role: :agent)).to be(true)
+    end
+
+    it 'allows removal while another administrator remains' do
+      create(:account_user, account: administrator.account, role: :administrator)
+
+      expect(administrator.destroy!).to be_destroyed
+    end
+
+    it 'protects the last administrator when destroy uses a stale agent instance' do
+      promoted_agent = create(:account_user, account: administrator.account, role: :agent)
+      stale_agent = described_class.find(promoted_agent.id)
+
+      promoted_agent.update!(role: :administrator)
+      administrator.update!(role: :agent)
+
+      expect { stale_agent.destroy! }.to raise_error(ActiveRecord::RecordNotDestroyed)
+      expect(promoted_agent.reload).to be_administrator
     end
   end
 

@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useRoute, useRouter } from 'vue-router';
 import { useStore, useMapGetter } from 'dashboard/composables/store';
+import { useAlert } from 'dashboard/composables';
 import {
   MEDIA_TYPES,
   NON_FILE_TYPES,
@@ -12,6 +13,7 @@ import GalleryView from 'dashboard/components/widgets/conversation/components/Ga
 import Media from 'dashboard/components-next/SharedAttachments/Media.vue';
 import Files from 'dashboard/components-next/SharedAttachments/Files.vue';
 import Spinner from 'dashboard/components-next/spinner/Spinner.vue';
+import { useProtectedContactMedia } from 'dashboard/composables/useProtectedContactMedia';
 
 const MEDIA_PEEK_LIMIT = 12;
 const FILES_PEEK_LIMIT = 6;
@@ -20,6 +22,7 @@ const route = useRoute();
 const router = useRouter();
 const store = useStore();
 const { t } = useI18n();
+const { resolveProtectedContactMediaUrl } = useProtectedContactMedia();
 
 const attachmentsByContact = useMapGetter('contacts/getContactAttachments');
 const uiFlags = useMapGetter('contacts/getUIFlags');
@@ -49,10 +52,9 @@ const onMediaSelect = attachment => {
   showGallery.value = true;
 };
 
-const onFileSelect = attachment => {
-  if (attachment.data_url) {
-    window.open(attachment.data_url, '_blank', 'noopener,noreferrer');
-  }
+const onFileSelect = async attachment => {
+  const sourceUrl = await resolveProtectedContactMediaUrl(attachment.data_url);
+  if (sourceUrl) window.open(sourceUrl, '_blank', 'noopener,noreferrer');
 };
 
 const onJumpToMessage = attachment => {
@@ -67,8 +69,12 @@ const onJumpToMessage = attachment => {
   });
 };
 
-onMounted(() => {
-  store.dispatch('contacts/fetchAttachments', route.params.contactId);
+onMounted(async () => {
+  try {
+    await store.dispatch('contacts/fetchAttachments', route.params.contactId);
+  } catch (error) {
+    useAlert(error.data || error.message || t('CONVERSATION.MESSAGE_ERROR'));
+  }
 });
 </script>
 
@@ -84,6 +90,7 @@ onMounted(() => {
       <Media
         :attachments="attachments"
         :peek-limit="MEDIA_PEEK_LIMIT"
+        :resolve-media-url="resolveProtectedContactMediaUrl"
         show-jump-to-message
         @select="onMediaSelect"
         @jump-to-message="onJumpToMessage"
@@ -91,6 +98,7 @@ onMounted(() => {
       <Files
         :attachments="attachments"
         :peek-limit="FILES_PEEK_LIMIT"
+        :resolve-media-url="resolveProtectedContactMediaUrl"
         show-jump-to-message
         @select="onFileSelect"
         @jump-to-message="onJumpToMessage"
@@ -101,6 +109,7 @@ onMounted(() => {
       v-model:show="showGallery"
       :attachment="selectedAttachment"
       :all-attachments="mediaAttachments"
+      :resolve-attachment-url="resolveProtectedContactMediaUrl"
       auto-play
       @close="showGallery = false"
     />

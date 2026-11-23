@@ -28,6 +28,35 @@ describe('#actions', () => {
         [types.default.SET_CONTACT_NOTES_UI_FLAG, { isFetching: false }],
       ]);
     });
+
+    it('clears contact read caches when access is denied', async () => {
+      axios.get.mockRejectedValue({ response: { status: 403 } });
+
+      await expect(actions.get({ commit }, { contactId: 23 })).rejects.toThrow(
+        Error
+      );
+
+      expect(commit.mock.calls).toEqual([
+        [types.default.SET_CONTACT_NOTES_UI_FLAG, { isFetching: true }],
+        [`contacts/${types.default.CLEAR_CONTACTS}`, null, { root: true }],
+        [
+          `contactNotes/${types.default.CLEAR_ALL_CONTACT_NOTES}`,
+          null,
+          { root: true },
+        ],
+        [
+          `contactConversations/${types.default.CLEAR_ALL_CONTACT_CONVERSATIONS}`,
+          null,
+          { root: true },
+        ],
+        [
+          `contactConversations/${types.default.CLEAR_ALL_CONVERSATION_NEIGHBOURS}`,
+          null,
+          { root: true },
+        ],
+        [types.default.SET_CONTACT_NOTES_UI_FLAG, { isFetching: false }],
+      ]);
+    });
   });
   describe('#create', () => {
     it('sends correct actions if API is success', async () => {

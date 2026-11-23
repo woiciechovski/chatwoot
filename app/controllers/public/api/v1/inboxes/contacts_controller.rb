@@ -16,7 +16,12 @@ class Public::Api::V1::Inboxes::ContactsController < Public::Api::V1::InboxesCon
   def update
     contact_identify_action = ContactIdentifyAction.new(
       contact: @contact_inbox.contact,
-      params: permitted_params.to_h.deep_symbolize_keys.except(:identifier)
+      params: permitted_params.to_h.deep_symbolize_keys.except(:identifier),
+      avatar_authorization_context: Contacts::Authorization.system_avatar_context(
+        contact: @contact_inbox.contact,
+        inbox: @inbox_channel.inbox,
+        origin: 'contact_identify_action'
+      )
     )
     contact_identify_action.perform
     @contact_inbox.reload

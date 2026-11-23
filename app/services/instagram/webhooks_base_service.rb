@@ -23,7 +23,14 @@ class Instagram::WebhooksBaseService
 
     @contact = @contact_inbox.contact
     update_instagram_profile_link(user)
-    Avatar::AvatarFromUrlJob.perform_later(@contact, user['profile_pic']) if user['profile_pic']
+    return unless user['profile_pic']
+
+    authorization = Contacts::Authorization.system_avatar_context(
+      contact: @contact,
+      inbox: @contact_inbox.inbox,
+      origin: 'instagram_webhook'
+    )
+    Avatar::AvatarFromUrlJob.perform_later(@contact, user['profile_pic'], authorization)
   end
 
   def update_instagram_profile_link(user)

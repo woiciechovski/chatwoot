@@ -41,6 +41,36 @@ describe('#actions', () => {
         ],
       ]);
     });
+
+    it('clears contact read caches when access is denied', async () => {
+      axios.get.mockRejectedValue({ response: { status: 403 } });
+
+      await actions.get({ commit }, 23);
+
+      expect(commit.mock.calls).toEqual([
+        [types.default.SET_CONTACT_CONVERSATIONS_UI_FLAG, { isFetching: true }],
+        [`contacts/${types.default.CLEAR_CONTACTS}`, null, { root: true }],
+        [
+          `contactNotes/${types.default.CLEAR_ALL_CONTACT_NOTES}`,
+          null,
+          { root: true },
+        ],
+        [
+          `contactConversations/${types.default.CLEAR_ALL_CONTACT_CONVERSATIONS}`,
+          null,
+          { root: true },
+        ],
+        [
+          `contactConversations/${types.default.CLEAR_ALL_CONVERSATION_NEIGHBOURS}`,
+          null,
+          { root: true },
+        ],
+        [
+          types.default.SET_CONTACT_CONVERSATIONS_UI_FLAG,
+          { isFetching: false },
+        ],
+      ]);
+    });
   });
 
   describe('#getNeighbours', () => {
@@ -63,6 +93,34 @@ describe('#actions', () => {
         { contactId: 4, conversationId: 13 }
       );
       expect(commit.mock.calls).toEqual([]);
+    });
+
+    it('clears contact caches and neighbours when access is denied', async () => {
+      axios.get.mockRejectedValue({ response: { status: 403 } });
+
+      await actions.getNeighbours(
+        { commit },
+        { contactId: 4, conversationId: 13 }
+      );
+
+      expect(commit.mock.calls).toEqual([
+        [`contacts/${types.default.CLEAR_CONTACTS}`, null, { root: true }],
+        [
+          `contactNotes/${types.default.CLEAR_ALL_CONTACT_NOTES}`,
+          null,
+          { root: true },
+        ],
+        [
+          `contactConversations/${types.default.CLEAR_ALL_CONTACT_CONVERSATIONS}`,
+          null,
+          { root: true },
+        ],
+        [
+          `contactConversations/${types.default.CLEAR_ALL_CONVERSATION_NEIGHBOURS}`,
+          null,
+          { root: true },
+        ],
+      ]);
     });
   });
 

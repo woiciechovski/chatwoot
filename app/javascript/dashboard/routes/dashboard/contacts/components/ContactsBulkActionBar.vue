@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n';
 import BulkSelectBar from 'dashboard/components-next/captain/assistant/BulkSelectBar.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
 import BulkLabelActions from 'dashboard/components/widgets/conversation/conversationBulkActions/BulkLabelActions.vue';
-import Policy from 'dashboard/components/policy.vue';
+import { usePolicy } from 'dashboard/composables/usePolicy';
 
 const props = defineProps({
   visibleContactIds: {
@@ -31,6 +31,7 @@ const emit = defineEmits([
 ]);
 
 const { t } = useI18n();
+const { checkContactPermission } = usePolicy();
 
 const selectedCount = computed(() => props.selectedContactIds.length);
 const totalVisibleContacts = computed(() => props.visibleContactIds.length);
@@ -103,12 +104,14 @@ const handleRemoveLabels = labels => {
       <template #actions>
         <div class="flex items-center gap-2 ml-auto">
           <BulkLabelActions
+            v-if="checkContactPermission('contacts.update')"
             type="contact"
             :is-loading="isLoading"
             :disabled="!selectedCount"
             @assign="handleAssignLabels"
           />
           <BulkLabelActions
+            v-if="checkContactPermission('contacts.update')"
             type="contact"
             action="remove"
             :is-loading="isLoading"
@@ -116,7 +119,7 @@ const handleRemoveLabels = labels => {
             @remove="handleRemoveLabels"
           />
           <div class="w-px h-3 bg-n-weak rounded-lg" />
-          <Policy :permissions="['administrator']">
+          <template v-if="checkContactPermission('contacts.delete')">
             <Button
               v-tooltip.bottom="t('CONTACTS_BULK_ACTIONS.DELETE_CONTACTS')"
               sm
@@ -130,7 +133,7 @@ const handleRemoveLabels = labels => {
               class="!px-2 [&>span:nth-child(2)]:hidden md:[&>span:nth-child(2)]:inline-flex"
               @click="emit('deleteSelected')"
             />
-          </Policy>
+          </template>
         </div>
       </template>
     </BulkSelectBar>

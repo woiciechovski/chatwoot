@@ -26,6 +26,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  resolveAttachmentUrl: {
+    type: Function,
+    default: null,
+  },
 });
 
 const emit = defineEmits(['close']);
@@ -121,11 +125,16 @@ const setImageAndVideoSrc = attachment => {
   activeFileType.value = type;
 };
 
-const onClickChangeAttachment = (attachment, index) => {
+const onClickChangeAttachment = async (attachment, index) => {
   if (!attachment) return;
 
+  const sourceUrl = props.resolveAttachmentUrl
+    ? await props.resolveAttachmentUrl(attachment.data_url)
+    : attachment.data_url;
+  if (!sourceUrl) return;
+
   activeImageIndex.value = index;
-  setImageAndVideoSrc(attachment);
+  setImageAndVideoSrc({ ...attachment, data_url: sourceUrl });
   resetZoomAndRotation();
 };
 
@@ -166,7 +175,10 @@ const keyboardEvents = {
 useKeyboardEvents(keyboardEvents);
 
 onMounted(() => {
-  setImageAndVideoSrc(props.attachment);
+  const attachmentIndex = props.allAttachments.findIndex(
+    attachment => attachment.message_id === props.attachment.message_id
+  );
+  onClickChangeAttachment(props.attachment, Math.max(0, attachmentIndex));
 });
 </script>
 

@@ -12,6 +12,8 @@ describe('#ContactsAPI', () => {
     expect(contactAPI).toHaveProperty('getConversations');
     expect(contactAPI).toHaveProperty('filter');
     expect(contactAPI).toHaveProperty('destroyAvatar');
+    expect(contactAPI).toHaveProperty('getCapabilities');
+    expect(contactAPI).toHaveProperty('fetchProtectedMedia');
   });
 
   describe('API calls', () => {
@@ -162,6 +164,23 @@ describe('#ContactsAPI', () => {
       contactAPI.destroyAvatar(1);
       expect(axiosMock.delete).toHaveBeenCalledWith(
         '/api/v1/contacts/1/avatar'
+      );
+    });
+
+    it('#getCapabilities', () => {
+      contactAPI.getCapabilities(123);
+      expect(axiosMock.get).toHaveBeenCalledWith(
+        '/api/v1/accounts/123/rbac/me/capabilities'
+      );
+    });
+
+    it('#fetchProtectedMedia', () => {
+      contactAPI.fetchProtectedMedia(
+        '/api/v1/accounts/123/contacts/1/avatar/download'
+      );
+      expect(axiosMock.get).toHaveBeenCalledWith(
+        '/api/v1/accounts/123/contacts/1/avatar/download',
+        { responseType: 'blob' }
       );
     });
   });

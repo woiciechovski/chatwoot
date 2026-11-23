@@ -23,14 +23,33 @@ class Api::V1::Accounts::AgentsController < Api::V1::Accounts::BaseController
   end
 
   def update
-    @agent.update!(agent_params.slice(:name).compact)
-    @agent.current_account_user.update!(agent_params.slice(*account_user_attributes).compact)
+    account = Current.account
+    actor = Current.account_user
+    attributes = agent_params
+    user_attributes = attributes.slice(:name).compact
+    membership_attributes = attributes.slice(*account_user_attributes).compact
+
+    if membership_attributes.key?(:role)
+      update_agent_with_locked_membership(user_attributes, membership_attributes)
+    else
+      @agent.update!(user_attributes)
+      @agent.current_account_user.update!(membership_attributes)
+    end
+  rescue ActiveRecord::RecordInvalid => e
+    record_denied_administrator_change(account, actor, e.record, 'administrator.demotion.denied')
+    raise
   end
 
   def destroy
+    account = Current.account
+    actor = Current.account_user
     @agent.current_account_user.destroy!
     delete_user_record(@agent)
     head :ok
+  rescue ActiveRecord::RecordNotDestroyed => e
+    record_denied_administrator_change(account, actor, e.record, 'administrator.removal.denied')
+    render json: { message: e.record.errors.full_messages.join(', '), attributes: e.record.errors.attribute_names },
+           status: :unprocessable_entity
   end
 
   def bulk_create
@@ -59,6 +78,18 @@ class Api::V1::Accounts::AgentsController < Api::V1::Accounts::BaseController
     [:role, :availability, :auto_offline]
   end
 
+  def update_agent_with_locked_membership(user_attributes, membership_attributes)
+    Rbac::MembershipLockService.with_membership(
+      account_id: Current.account.id,
+      user_id: @agent.id,
+      membership_id: @agent.current_account_user.id
+    ) do |_account, _user, membership|
+      @agent.update!(user_attributes)
+      membership.update!(membership_attributes)
+      @agent.reload
+    end
+  end
+
   def allowed_agent_params
     [:name, :email, :role, :availability, :auto_offline]
   end
@@ -78,14 +109,15 @@ class Api::V1::Accounts::AgentsController < Api::V1::Accounts::BaseController
   def bulk_create_agents(emails)
     email_limit_error = nil
 
-    Current.account.with_lock do
-      raise AgentBuilder::LimitExceededError if emails.count > available_agent_count
+    exceeds_capacity = Rbac::MembershipLockService.with_account(account_id: Current.account.id) do |account|
+      emails.count > available_agent_count(account)
+    end
+    raise AgentBuilder::LimitExceededError if exceeds_capacity
 
-      emails.each do |email|
-        create_agent_from_email(email)
-      rescue CustomExceptions::Account::EmailLimitExceeded => e
-        email_limit_error = e
-      end
+    emails.each do |email|
+      create_agent_from_email(email)
+    rescue CustomExceptions::Account::EmailLimitExceeded => e
+      email_limit_error = e
     end
 
     raise email_limit_error if email_limit_error
@@ -108,12 +140,26 @@ class Api::V1::Accounts::AgentsController < Api::V1::Accounts::BaseController
     Current.account.save!
   end
 
-  def available_agent_count
-    Current.account.usage_limits[:agents] - Current.account.account_users.count
+  def available_agent_count(account = Current.account)
+    account.usage_limits[:agents] - account.account_users.count
   end
 
   def delete_user_record(agent)
     DeleteObjectJob.perform_later(agent) if agent.reload.account_users.blank?
+  end
+
+  def record_denied_administrator_change(account, actor, account_user, action)
+    return unless account_user.is_a?(AccountUser)
+    return unless account_user.errors.details.values.flatten.any? { |detail| detail[:error] == :last_administrator }
+
+    Rbac::AuditEvents::Recorder.record_denied_safely!(
+      account: account,
+      actor: actor,
+      action: action,
+      target_type: 'AccountUser',
+      target_id: account_user.id,
+      metadata: { request_id: request.request_id }
+    )
   end
 end
 

@@ -89,4 +89,14 @@ class Api::V1::Widget::BaseController < ApplicationController
       message_type: :incoming
     }
   end
+
+  def contact_avatar_authorization_context(contact = @contact)
+    return if @contact_inbox.blank?
+
+    Contacts::Authorization.system_avatar_context(
+      contact: contact,
+      inbox: @contact_inbox.inbox,
+      origin: 'contact_identify_action'
+    )
+  end
 end

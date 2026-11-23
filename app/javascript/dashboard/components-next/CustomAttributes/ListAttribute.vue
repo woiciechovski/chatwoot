@@ -14,6 +14,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  disabled: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const emit = defineEmits(['update', 'delete']);
@@ -34,6 +38,7 @@ const attributeListMenuItems = computed(() => {
 });
 
 const handleAttributeAction = async action => {
+  if (props.disabled) return;
   emit('update', action.value);
   toggleAttributeListDropdown(false);
 };
@@ -58,7 +63,7 @@ const handleAttributeAction = async action => {
             !isEditingView,
           'text-n-slate-12 truncate flex-1': isEditingView,
         }"
-        @click="toggleAttributeListDropdown(!props.isEditingView)"
+        @click="!disabled && toggleAttributeListDropdown(!props.isEditingView)"
       >
         {{
           attribute.value ||
@@ -66,7 +71,7 @@ const handleAttributeAction = async action => {
         }}
       </span>
       <DropdownMenu
-        v-if="showAttributeListDropdown"
+        v-if="showAttributeListDropdown && !disabled"
         :menu-items="attributeListMenuItems"
         show-search
         class="w-48 mt-2 top-full"
@@ -78,7 +83,7 @@ const handleAttributeAction = async action => {
       />
     </div>
 
-    <div v-if="isEditingView" class="flex items-center gap-1">
+    <div v-if="isEditingView && !disabled" class="flex items-center gap-1">
       <Button
         variant="faded"
         color="slate"

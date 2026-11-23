@@ -18,20 +18,32 @@ shared_examples_for 'avatarable' do
       if avatarable.respond_to?(:email)
         avatarable.email = 'test@test.com'
         avatarable.skip_reconfirmation! if avatarable.is_a? User
-        expect(Avatar::AvatarFromGravatarJob).to receive(:set).with(wait: 30.seconds).and_call_original
+        if avatarable.is_a?(Contact)
+          expect(Avatar::AvatarFromGravatarJob).not_to receive(:set)
+        else
+          expect(Avatar::AvatarFromGravatarJob).to receive(:set).with(wait: 30.seconds).and_call_original
+        end
       end
       avatarable.save!
-      expect(Avatar::AvatarFromGravatarJob).to have_been_enqueued.with(avatarable, avatarable.email) if avatarable.respond_to?(:email)
+      if avatarable.respond_to?(:email) && !avatarable.is_a?(Contact)
+        expect(Avatar::AvatarFromGravatarJob).to have_been_enqueued.with(avatarable, avatarable.email, nil)
+      end
     end
 
     it 'enques job when email is changes on avatarable update' do
       if avatarable.respond_to?(:email)
         avatarable.email = 'xyc@test.com'
         avatarable.skip_reconfirmation! if avatarable.is_a? User
-        expect(Avatar::AvatarFromGravatarJob).to receive(:set).with(wait: 30.seconds).and_call_original
+        if avatarable.is_a?(Contact)
+          expect(Avatar::AvatarFromGravatarJob).not_to receive(:set)
+        else
+          expect(Avatar::AvatarFromGravatarJob).to receive(:set).with(wait: 30.seconds).and_call_original
+        end
       end
       avatarable.save!
-      expect(Avatar::AvatarFromGravatarJob).to have_been_enqueued.with(avatarable, avatarable.email) if avatarable.respond_to?(:email)
+      if avatarable.respond_to?(:email) && !avatarable.is_a?(Contact)
+        expect(Avatar::AvatarFromGravatarJob).to have_been_enqueued.with(avatarable, avatarable.email, nil)
+      end
     end
 
     it 'will not enqueu when email is not changed on avatarable update' do

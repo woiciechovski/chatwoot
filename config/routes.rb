@@ -80,6 +80,16 @@ Rails.application.routes.draw do
           resources :agents, only: [:index, :create, :update, :destroy] do
             post :bulk_create, on: :collection
           end
+          namespace :rbac do
+            get :permissions, to: 'permissions#index'
+            get 'me/capabilities', to: 'capabilities#show'
+            resources :roles, only: [:index, :show, :create, :update, :destroy] do
+              put :grants, on: :member
+            end
+            put 'account_users/:account_user_id/role', to: 'account_user_roles#update'
+            delete 'account_users/:account_user_id/role', to: 'account_user_roles#destroy'
+            resources :audit_events, only: [:index]
+          end
           namespace :captain do
             resource :preferences, only: [:show, :update]
             resources :assistants do
@@ -285,11 +295,13 @@ Rails.application.routes.draw do
               post :filter
               post :import
               post :export
+              get 'export/download', to: 'contacts/exports#show', as: :export_download
             end
             member do
               get :contactable_inboxes
               post :destroy_custom_attributes
               delete :avatar
+              get 'avatar/download', to: 'contacts/avatar_downloads#show', as: :avatar_download
             end
             scope module: :contacts do
               resources :conversations, only: [:index]
@@ -297,6 +309,7 @@ Rails.application.routes.draw do
               resources :labels, only: [:create, :index]
               resources :notes
               get :attachments, to: 'attachments#index'
+              get 'attachments/:id/download', to: 'attachments#download', as: :attachment_download
               post :call, on: :member, to: 'calls#create' if ChatwootApp.enterprise?
             end
           end

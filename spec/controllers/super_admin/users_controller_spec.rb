@@ -152,6 +152,45 @@ RSpec.describe 'Super Admin Users API', type: :request do
     end
   end
 
+  describe 'DELETE /super_admin/users/:id' do
+    before { sign_in(super_admin, scope: :super_admin) }
+
+    it 'retains a user with an administrator membership in a suspended account' do
+      account_user = create(:account_user, role: :administrator)
+      account_user.account.update!(status: :suspended)
+
+      delete "/super_admin/users/#{account_user.user_id}"
+
+      expect(response).to redirect_to(super_admin_users_path)
+      expect(User.exists?(account_user.user_id)).to be(true)
+      expect(account_user.reload).to be_administrator
+      expect(RbacAuditEvent.last).to have_attributes(
+        account: account_user.account,
+        actor: super_admin,
+        action: 'user.delete.denied',
+        target_type: 'AccountUser',
+        target_id: account_user.id,
+        result: 'denied'
+      )
+    end
+
+    it 'allows deletion after account scoped operations remove all administrator links' do
+      account = create(:account)
+      target = create(:user, account: account, role: :administrator)
+      create(:account_user, account: account, role: :administrator)
+      target_membership = AccountUser.find_by!(account: account, user: target)
+
+      delete "/super_admin/account_users/#{target_membership.id}"
+      expect(response).to redirect_to(super_admin_account_path(account))
+      expect(AccountUser.exists?(target_membership.id)).to be(false)
+
+      delete "/super_admin/users/#{target.id}"
+
+      expect(response).to redirect_to(super_admin_users_path)
+      expect(User.exists?(target.id)).to be(false)
+    end
+  end
+
   describe 'POST /super_admin/users/:id/resend_confirmation' do
     def mail_jobs
       ActiveJob::Base.queue_adapter.enqueued_jobs.select do |job|

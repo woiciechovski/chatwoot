@@ -33,19 +33,23 @@ describe('#actions', () => {
       });
       await actions.get({ commit });
       expect(commit.mock.calls).toEqual([
-        [types.SET_CONTACT_UI_FLAG, { isFetching: true }],
+        [types.SET_CONTACT_UI_FLAG, { isFetching: true, fetchError: null }],
         [types.CLEAR_CONTACTS],
         [types.SET_CONTACTS, contactList],
         [types.SET_CONTACT_META, { count: 100, current_page: 1 }],
-        [types.SET_CONTACT_UI_FLAG, { isFetching: false }],
+        [types.SET_CONTACT_UI_FLAG, { isFetching: false, fetchError: null }],
       ]);
     });
     it('sends correct mutations if API is error', async () => {
       axios.get.mockRejectedValue({ message: 'Incorrect header' });
       await actions.get({ commit });
       expect(commit.mock.calls).toEqual([
-        [types.SET_CONTACT_UI_FLAG, { isFetching: true }],
-        [types.SET_CONTACT_UI_FLAG, { isFetching: false }],
+        [types.SET_CONTACT_UI_FLAG, { isFetching: true, fetchError: null }],
+        [types.CLEAR_CONTACTS],
+        [
+          types.SET_CONTACT_UI_FLAG,
+          { isFetching: false, fetchError: 'Incorrect header' },
+        ],
       ]);
     });
   });
@@ -56,15 +60,58 @@ describe('#actions', () => {
       await actions.show({ commit }, { id: contactList[0].id });
       expect(commit.mock.calls).toEqual([
         [types.SET_CONTACT_UI_FLAG, { isFetchingItem: true }],
+        [
+          `contactNotes/${types.CLEAR_CONTACT_NOTES}`,
+          contactList[0].id,
+          { root: true },
+        ],
+        [
+          `contactConversations/${types.DELETE_CONTACT_CONVERSATION}`,
+          contactList[0].id,
+          { root: true },
+        ],
         [types.SET_CONTACT_ITEM, contactList[0]],
         [types.SET_CONTACT_UI_FLAG, { isFetchingItem: false }],
       ]);
     });
     it('sends correct mutations if API is error', async () => {
-      axios.get.mockRejectedValue({ message: 'Incorrect header' });
-      await actions.show({ commit }, { id: contactList[0].id });
+      const error = {
+        response: {
+          status: 401,
+          data: { message: 'You are not authorized to access this account' },
+        },
+      };
+      axios.get.mockRejectedValue(error);
+
+      await expect(
+        actions.show({ commit }, { id: contactList[0].id })
+      ).rejects.toMatchObject({
+        data: 'You are not authorized to access this account',
+      });
       expect(commit.mock.calls).toEqual([
         [types.SET_CONTACT_UI_FLAG, { isFetchingItem: true }],
+        [
+          `contactNotes/${types.CLEAR_CONTACT_NOTES}`,
+          contactList[0].id,
+          { root: true },
+        ],
+        [
+          `contactConversations/${types.DELETE_CONTACT_CONVERSATION}`,
+          contactList[0].id,
+          { root: true },
+        ],
+        [`contacts/${types.CLEAR_CONTACTS}`, null, { root: true }],
+        [`contactNotes/${types.CLEAR_ALL_CONTACT_NOTES}`, null, { root: true }],
+        [
+          `contactConversations/${types.CLEAR_ALL_CONTACT_CONVERSATIONS}`,
+          null,
+          { root: true },
+        ],
+        [
+          `contactConversations/${types.CLEAR_ALL_CONVERSATION_NEIGHBOURS}`,
+          null,
+          { root: true },
+        ],
         [types.SET_CONTACT_UI_FLAG, { isFetchingItem: false }],
       ]);
     });
@@ -77,19 +124,23 @@ describe('#actions', () => {
       });
       await actions.active({ commit });
       expect(commit.mock.calls).toEqual([
-        [types.SET_CONTACT_UI_FLAG, { isFetching: true }],
+        [types.SET_CONTACT_UI_FLAG, { isFetching: true, fetchError: null }],
         [types.CLEAR_CONTACTS],
         [types.SET_CONTACTS, contactList],
         [types.SET_CONTACT_META, { count: 100, current_page: 1 }],
-        [types.SET_CONTACT_UI_FLAG, { isFetching: false }],
+        [types.SET_CONTACT_UI_FLAG, { isFetching: false, fetchError: null }],
       ]);
     });
     it('sends correct mutations if API is error', async () => {
       axios.get.mockRejectedValue({ message: 'Incorrect header' });
       await actions.active({ commit });
       expect(commit.mock.calls).toEqual([
-        [types.SET_CONTACT_UI_FLAG, { isFetching: true }],
-        [types.SET_CONTACT_UI_FLAG, { isFetching: false }],
+        [types.SET_CONTACT_UI_FLAG, { isFetching: true, fetchError: null }],
+        [types.CLEAR_CONTACTS],
+        [
+          types.SET_CONTACT_UI_FLAG,
+          { isFetching: false, fetchError: 'Incorrect header' },
+        ],
       ]);
     });
   });
@@ -342,11 +393,31 @@ describe('#actions', () => {
       await actions.filter({ commit }, filterQueryData);
       expect(commit).toHaveBeenCalledTimes(5);
       expect(commit.mock.calls).toEqual([
-        ['SET_CONTACT_UI_FLAG', { isFetching: true }],
+        ['SET_CONTACT_UI_FLAG', { isFetching: true, fetchError: null }],
         ['CLEAR_CONTACTS'],
         ['SET_CONTACTS', filterApiResponse.payload],
         ['SET_CONTACT_META', filterApiResponse.meta],
-        ['SET_CONTACT_UI_FLAG', { isFetching: false }],
+        ['SET_CONTACT_UI_FLAG', { isFetching: false, fetchError: null }],
+      ]);
+    });
+
+    it('records an authorization error and clears the contact list', async () => {
+      axios.post.mockRejectedValue({
+        response: {
+          data: { message: 'You are not authorized to access this account' },
+        },
+      });
+
+      await expect(
+        actions.filter({ commit }, filterQueryData)
+      ).resolves.toEqual([]);
+      expect(commit.mock.calls).toContainEqual([types.CLEAR_CONTACTS]);
+      expect(commit.mock.calls).toContainEqual([
+        types.SET_CONTACT_UI_FLAG,
+        {
+          isFetching: false,
+          fetchError: 'You are not authorized to access this account',
+        },
       ]);
     });
   });
@@ -505,6 +576,7 @@ describe('#actions', () => {
       ).rejects.toThrow('Network error');
       expect(commit.mock.calls).toEqual([
         [types.SET_CONTACT_UI_FLAG, { isFetchingAttachments: true }],
+        [types.SET_CONTACT_ATTACHMENTS, { id: 1, data: [] }],
         [types.SET_CONTACT_UI_FLAG, { isFetchingAttachments: false }],
       ]);
     });

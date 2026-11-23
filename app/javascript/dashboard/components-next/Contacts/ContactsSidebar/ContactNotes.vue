@@ -9,8 +9,10 @@ import Editor from 'dashboard/components-next/Editor/Editor.vue';
 import Spinner from 'dashboard/components-next/spinner/Spinner.vue';
 import Button from 'dashboard/components-next/button/Button.vue';
 import ContactNoteItem from './components/ContactNoteItem.vue';
+import { usePolicy } from 'dashboard/composables/usePolicy';
 
 const { t } = useI18n();
+const { checkContactPermission } = usePolicy();
 const store = useStore();
 const route = useRoute();
 
@@ -24,6 +26,9 @@ const uiFlags = useMapGetter('contactNotes/getUIFlags');
 const isFetchingNotes = computed(() => uiFlags.value.isFetching);
 const isCreatingNote = computed(() => uiFlags.value.isCreating);
 const notes = computed(() => notesByContact.value(route.params.contactId));
+const canUpdateContacts = computed(() =>
+  checkContactPermission('contacts.update')
+);
 
 const getWrittenBy = note => {
   const isCurrentUser = note?.user?.id === currentUser.value.id;
@@ -57,6 +62,7 @@ useKeyboardEvents(keyboardEvents);
 <template>
   <div class="flex flex-col gap-6">
     <Editor
+      v-if="canUpdateContacts"
       v-model="state.message"
       :placeholder="t('CONTACTS_LAYOUT.SIDEBAR.NOTES.PLACEHOLDER')"
       focus-on-mount
@@ -90,7 +96,7 @@ useKeyboardEvents(keyboardEvents);
         class="mx-6 py-4"
         :note="note"
         :written-by="getWrittenBy(note)"
-        allow-delete
+        :allow-delete="canUpdateContacts"
         @delete="onDelete"
       />
     </div>

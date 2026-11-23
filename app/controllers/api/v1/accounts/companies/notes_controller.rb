@@ -2,6 +2,7 @@ class Api::V1::Accounts::Companies::NotesController < Api::V1::Accounts::Compani
   RESULTS_PER_PAGE = 20
 
   before_action :authorize_company_read!
+  before_action :authorize_contacts_read!
 
   def index
     notes = Current.account.notes.where(contact_id: @company.contacts.select(:id))
@@ -10,5 +11,11 @@ class Api::V1::Accounts::Companies::NotesController < Api::V1::Accounts::Compani
                   .includes(:contact, :user)
                   .page(params[:page] || 1)
                   .per(RESULTS_PER_PAGE)
+  end
+
+  private
+
+  def authorize_contacts_read!
+    authorize Contact, :index?
   end
 end

@@ -13,6 +13,24 @@ describe('#mutations', () => {
       expect(state.records).toEqual({ 1: allNotes });
     });
   });
+  describe('#CLEAR_CONTACT_NOTES', () => {
+    it('clears notes for one contact and keeps other contact caches', () => {
+      const state = { records: { 1: allNotes, 2: allNotes } };
+
+      mutations[types.CLEAR_CONTACT_NOTES](state, 1);
+
+      expect(state.records).toEqual({ 2: allNotes });
+    });
+  });
+  describe('#CLEAR_ALL_CONTACT_NOTES', () => {
+    it('clears cached notes for every contact', () => {
+      const state = { records: { 1: allNotes, 2: allNotes } };
+
+      mutations[types.CLEAR_ALL_CONTACT_NOTES](state);
+
+      expect(state.records).toEqual({});
+    });
+  });
 
   describe('#ADD_CONTACT_NOTE', () => {
     it('push newly created note to the store', () => {

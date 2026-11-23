@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.2].define(version: 2026_11_21_180537) do
+ActiveRecord::Schema[7.2].define(version: 2026_11_22_141506) do
   # These extensions should be enabled to support this database
   enable_extension "pg_stat_statements"
   enable_extension "pg_trgm"
@@ -56,6 +56,9 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_21_180537) do
     t.bigint "agent_capacity_policy_id"
     t.boolean "accepts_conversations", default: true, null: false
     t.boolean "accepts_calls", default: true, null: false
+    t.bigint "rbac_role_id"
+    t.boolean "rbac_managed", default: false, null: false
+    t.index ["account_id", "rbac_role_id"], name: "index_account_users_on_account_and_rbac_role"
     t.index ["account_id", "user_id"], name: "uniq_user_id_per_account_id", unique: true
     t.index ["account_id"], name: "index_account_users_on_account_id"
     t.index ["agent_capacity_policy_id"], name: "index_account_users_on_agent_capacity_policy_id"
@@ -1662,6 +1665,44 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_21_180537) do
     t.index ["user_id"], name: "index_portals_members_on_user_id"
   end
 
+  create_table "rbac_audit_events", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.string "actor_type", null: false
+    t.bigint "actor_id"
+    t.string "action", null: false
+    t.string "target_type", null: false
+    t.bigint "target_id"
+    t.string "result", default: "success", null: false
+    t.jsonb "details", default: {}, null: false
+    t.string "request_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id", "created_at", "id"], name: "index_rbac_audit_events_for_account_history"
+    t.index ["target_type", "target_id"], name: "index_rbac_audit_events_on_target"
+  end
+
+  create_table "rbac_role_permissions", force: :cascade do |t|
+    t.bigint "rbac_role_id", null: false
+    t.string "permission_key", null: false
+    t.string "scope_type", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["rbac_role_id", "permission_key"], name: "index_rbac_role_permissions_on_role_and_key", unique: true
+  end
+
+  create_table "rbac_roles", force: :cascade do |t|
+    t.bigint "account_id", null: false
+    t.string "name", null: false
+    t.string "normalized_name", null: false
+    t.text "description"
+    t.boolean "active", default: true, null: false
+    t.integer "lock_version", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id", "id"], name: "index_rbac_roles_on_account_id_and_id", unique: true
+    t.index ["account_id", "normalized_name"], name: "index_rbac_roles_on_account_and_normalized_name", unique: true
+  end
+
   create_table "related_categories", force: :cascade do |t|
     t.bigint "category_id"
     t.bigint "related_category_id"
@@ -1893,6 +1934,7 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_21_180537) do
     t.index ["inbox_id"], name: "index_working_hours_on_inbox_id"
   end
 
+  add_foreign_key "account_users", "rbac_roles", column: ["account_id", "rbac_role_id"], primary_key: ["account_id", "id"], name: "fk_account_users_rbac_role_tenant", on_delete: :restrict
   add_foreign_key "active_storage_attachments", "active_storage_blobs", column: "blob_id"
   add_foreign_key "active_storage_variant_records", "active_storage_blobs", column: "blob_id"
   add_foreign_key "campaign_recipients", "accounts", on_delete: :cascade
@@ -1918,6 +1960,9 @@ ActiveRecord::Schema[7.2].define(version: 2026_11_21_180537) do
   add_foreign_key "conversation_monitors", "users", on_delete: :nullify
   add_foreign_key "inboxes", "conversation_flows", on_delete: :nullify
   add_foreign_key "inboxes", "portals"
+  add_foreign_key "rbac_audit_events", "accounts", on_delete: :cascade
+  add_foreign_key "rbac_role_permissions", "rbac_roles", on_delete: :cascade
+  add_foreign_key "rbac_roles", "accounts", on_delete: :cascade
   add_foreign_key "shopify_custom_apps", "accounts"
   add_foreign_key "user_sessions", "users"
   create_trigger("accounts_after_insert_row_tr", :generated => true, :compatibility => 1).

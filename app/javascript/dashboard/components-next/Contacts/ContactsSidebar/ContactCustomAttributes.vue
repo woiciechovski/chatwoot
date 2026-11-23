@@ -11,6 +11,10 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  readOnly: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const { t } = useI18n();
@@ -114,6 +118,7 @@ const hasNoUsedAttributes = computed(() => usedAttributes.value.length === 0);
         v-for="attribute in usedAttributes"
         :key="attribute.id"
         is-editing-view
+        :disabled="readOnly"
         :attribute="attribute"
       />
     </div>
@@ -151,6 +156,7 @@ const hasNoUsedAttributes = computed(() => usedAttributes.value.length === 0);
           v-for="attribute in filteredUnusedAttributes"
           :key="attribute.id"
           :attribute="attribute"
+          :disabled="readOnly"
         />
       </div>
     </div>

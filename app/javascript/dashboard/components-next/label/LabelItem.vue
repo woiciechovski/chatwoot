@@ -10,6 +10,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  canRemove: {
+    type: Boolean,
+    default: true,
+  },
 });
 
 const emit = defineEmits(['remove', 'hover']);
@@ -32,6 +36,7 @@ const handleMouseEnter = () => {
     @mouseenter="handleMouseEnter"
   >
     <div
+      v-if="canRemove"
       class="w-2 h-2 m-1 rounded-sm"
       :style="{ backgroundColor: label.color }"
     />

@@ -10,6 +10,8 @@ import Flag from 'dashboard/components-next/flag/Flag.vue';
 import ContactDeleteSection from 'dashboard/components-next/Contacts/ContactsCard/ContactDeleteSection.vue';
 import Checkbox from 'dashboard/components-next/checkbox/Checkbox.vue';
 import countries from 'shared/constants/countries';
+import { usePolicy } from 'dashboard/composables/usePolicy';
+import { useProtectedContactMedia } from 'dashboard/composables/useProtectedContactMedia';
 
 const props = defineProps({
   id: { type: Number, required: true },
@@ -35,6 +37,8 @@ const emit = defineEmits([
 ]);
 
 const { t } = useI18n();
+const { checkContactPermission } = usePolicy();
+const { resolveProtectedContactMediaUrl } = useProtectedContactMedia();
 
 const contactsFormRef = ref(null);
 
@@ -48,6 +52,22 @@ const getInitialContactData = () => ({
 });
 
 const contactData = ref(getInitialContactData());
+const protectedAvatarUrl = ref('');
+
+watch(
+  () => props.thumbnail,
+  async sourceUrl => {
+    protectedAvatarUrl.value = await resolveProtectedContactMediaUrl(sourceUrl);
+  },
+  { immediate: true }
+);
+
+const canUpdateContacts = computed(() =>
+  checkContactPermission('contacts.update')
+);
+const canExpandCard = computed(
+  () => canUpdateContacts.value || checkContactPermission('contacts.delete')
+);
 
 watch(
   () => props.companyId,
@@ -130,7 +150,7 @@ const handleAvatarHover = isHovered => {
         >
           <Avatar
             :name="name"
-            :src="thumbnail"
+            :src="protectedAvatarUrl"
             :size="42"
             :status="availabilityStatus"
             hide-offline-status
@@ -199,6 +219,7 @@ const handleAvatarHover = isHovered => {
       </div>
 
       <Button
+        v-if="canExpandCard"
         icon="i-lucide-chevron-down"
         variant="ghost"
         color="slate"
@@ -219,12 +240,14 @@ const handleAvatarHover = isHovered => {
           <div class="overflow-hidden">
             <div class="flex flex-col gap-6 p-6 border-t border-n-strong">
               <ContactsForm
+                v-if="canUpdateContacts"
                 ref="contactsFormRef"
                 :contact-data="contactData"
                 @update="handleFormUpdate"
               />
               <div>
                 <Button
+                  v-if="canUpdateContacts"
                   :label="
                     t('CONTACTS_LAYOUT.CARD.EDIT_DETAILS_FORM.UPDATE_BUTTON')
                   "

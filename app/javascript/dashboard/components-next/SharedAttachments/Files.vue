@@ -18,6 +18,7 @@ const props = defineProps({
   attachments: { type: Array, default: () => [] },
   peekLimit: { type: Number, default: 0 },
   showJumpToMessage: { type: Boolean, default: false },
+  resolveMediaUrl: { type: Function, default: null },
 });
 
 const emit = defineEmits(['select', 'jumpToMessage']);
@@ -74,7 +75,10 @@ const onDownloadFile = async attachment => {
   const { id, file_type: type, data_url: url, extension } = attachment;
   try {
     downloadingId.value = id;
-    await downloadFile({ url, type, extension });
+    const downloadUrl = props.resolveMediaUrl
+      ? await props.resolveMediaUrl(url)
+      : url;
+    await downloadFile({ url: downloadUrl, type, extension });
   } catch (error) {
     useAlert(t('CONVERSATION_SIDEBAR.SHARED_FILES.DOWNLOAD_ERROR'));
   } finally {

@@ -18,6 +18,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  canUpdate: {
+    type: Boolean,
+    default: true,
+  },
 });
 
 const emit = defineEmits(['goToContactsList', 'toggleBlock']);
@@ -89,6 +93,7 @@ const closeMobileSidebar = () => {
             />
             <div class="flex items-center gap-2">
               <Button
+                v-if="canUpdate"
                 :label="
                   !isContactBlocked
                     ? $t('CONTACTS_LAYOUT.HEADER.BLOCK_CONTACT')

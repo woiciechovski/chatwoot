@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, onMounted } from 'vue';
+import { computed, ref, onMounted, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useStore, useMapGetter } from 'dashboard/composables/store';
 import { useAlert } from 'dashboard/composables';
@@ -11,7 +11,8 @@ import Button from 'dashboard/components-next/button/Button.vue';
 import ContactLabels from 'dashboard/components-next/Contacts/ContactLabels/ContactLabels.vue';
 import ContactsForm from 'dashboard/components-next/Contacts/ContactsForm/ContactsForm.vue';
 import ConfirmContactDeleteDialog from 'dashboard/components-next/Contacts/ContactsForm/ConfirmContactDeleteDialog.vue';
-import Policy from 'dashboard/components/policy.vue';
+import { usePolicy } from 'dashboard/composables/usePolicy';
+import { useProtectedContactMedia } from 'dashboard/composables/useProtectedContactMedia';
 
 const props = defineProps({
   selectedContact: {
@@ -26,6 +27,8 @@ const exactTimestamp = useExactTimestamp();
 
 const { t } = useI18n();
 const store = useStore();
+const { checkContactPermission } = usePolicy();
+const { resolveProtectedContactMediaUrl } = useProtectedContactMedia();
 
 const confirmDeleteContactDialogRef = ref(null);
 
@@ -38,13 +41,31 @@ const uiFlags = useMapGetter('contacts/getUIFlags');
 const isUpdating = computed(() => uiFlags.value.isUpdating);
 
 const isFormInvalid = computed(() => contactsFormRef.value?.isFormInvalid);
+const canUpdateContacts = computed(() =>
+  checkContactPermission('contacts.update')
+);
+const canDeleteContacts = computed(() =>
+  checkContactPermission('contacts.delete')
+);
 
 const contactData = ref({});
+const protectedAvatarUrl = ref('');
 
 const getInitialContactData = () => {
   if (!props.selectedContact) return {};
   return { ...props.selectedContact };
 };
+
+const clearProtectedContactData = contactId => {
+  contactData.value = { id: contactId };
+  avatarFile.value = null;
+  avatarUrl.value = '';
+  protectedAvatarUrl.value = '';
+  emit('goToContactsList');
+};
+
+const isMinimalContactResponse = contact =>
+  Boolean(contact) && Object.keys(contact).every(key => key === 'id');
 
 onMounted(() => {
   Object.assign(contactData.value, getInitialContactData());
@@ -63,8 +84,16 @@ const lastActivityAt = computed(() => {
 });
 
 const avatarSrc = computed(() => {
-  return avatarUrl.value ? avatarUrl.value : contactData.value?.thumbnail;
+  return avatarUrl.value ? avatarUrl.value : protectedAvatarUrl.value;
 });
+
+watch(
+  () => contactData.value?.thumbnail,
+  async sourceUrl => {
+    protectedAvatarUrl.value = await resolveProtectedContactMediaUrl(sourceUrl);
+  },
+  { immediate: true }
+);
 
 const handleFormUpdate = updatedData => {
   Object.assign(contactData.value, updatedData);
@@ -73,14 +102,15 @@ const handleFormUpdate = updatedData => {
 const updateContact = async () => {
   try {
     const { customAttributes, ...basicContactData } = contactData.value;
-    await store.dispatch('contacts/update', {
+    const updatedContact = await store.dispatch('contacts/update', {
       ...basicContactData,
       resolveLegacyCompany: true,
     });
-    Object.assign(
-      contactData.value,
-      store.getters['contacts/getContactById'](props.selectedContact.id)
-    );
+    if (isMinimalContactResponse(updatedContact)) {
+      clearProtectedContactData(updatedContact.id);
+      return;
+    }
+    contactData.value = { ...updatedContact };
     await store.dispatch(
       'contacts/fetchContactableInbox',
       props.selectedContact.id
@@ -100,11 +130,15 @@ const handleAvatarUpload = async ({ file, url }) => {
   avatarUrl.value = url;
 
   try {
-    await store.dispatch('contacts/update', {
+    const updatedContact = await store.dispatch('contacts/update', {
       ...contactsFormRef.value?.state,
       avatar: file,
       isFormData: true,
     });
+    if (isMinimalContactResponse(updatedContact)) {
+      clearProtectedContactData(updatedContact.id);
+      return;
+    }
     useAlert(t('CONTACTS_LAYOUT.DETAILS.AVATAR.UPLOAD.SUCCESS_MESSAGE'));
   } catch {
     useAlert(t('CONTACTS_LAYOUT.DETAILS.AVATAR.UPLOAD.ERROR_MESSAGE'));
@@ -114,7 +148,14 @@ const handleAvatarUpload = async ({ file, url }) => {
 const handleAvatarDelete = async () => {
   try {
     if (props.selectedContact && props.selectedContact.id) {
-      await store.dispatch('contacts/deleteAvatar', props.selectedContact.id);
+      const updatedContact = await store.dispatch(
+        'contacts/deleteAvatar',
+        props.selectedContact.id
+      );
+      if (isMinimalContactResponse(updatedContact)) {
+        clearProtectedContactData(updatedContact.id);
+        return;
+      }
       useAlert(t('CONTACTS_LAYOUT.DETAILS.AVATAR.DELETE.SUCCESS_MESSAGE'));
     }
     avatarFile.value = null;
@@ -137,7 +178,7 @@ const handleAvatarDelete = async () => {
         :src="avatarSrc || ''"
         :name="selectedContact?.name || ''"
         :size="72"
-        allow-upload
+        :allow-upload="canUpdateContacts"
         @upload="handleAvatarUpload"
         @delete="handleAvatarDelete"
       />
@@ -184,16 +225,21 @@ const handleAvatarDelete = async () => {
           </span>
         </div>
       </div>
-      <ContactLabels :contact-id="selectedContact?.id" />
+      <ContactLabels
+        :contact-id="selectedContact?.id"
+        :read-only="!canUpdateContacts"
+      />
     </div>
     <div class="flex flex-col items-start gap-6">
       <ContactsForm
         ref="contactsFormRef"
         :contact-data="contactData"
         is-details-view
+        :read-only="!canUpdateContacts"
         @update="handleFormUpdate"
       />
       <Button
+        v-if="canUpdateContacts"
         :label="t('CONTACTS_LAYOUT.CARD.EDIT_DETAILS_FORM.UPDATE_BUTTON')"
         size="sm"
         :is-loading="isUpdating"
@@ -201,7 +247,7 @@ const handleAvatarDelete = async () => {
         @click="updateContact"
       />
     </div>
-    <Policy :permissions="['administrator']">
+    <div v-if="canDeleteContacts">
       <div
         class="flex flex-col items-start w-full gap-4 pt-6 border-t border-n-strong"
       >
@@ -224,6 +270,6 @@ const handleAvatarDelete = async () => {
         :selected-contact="selectedContact"
         @go-to-contacts-list="emit('goToContactsList')"
       />
-    </Policy>
+    </div>
   </div>
 </template>

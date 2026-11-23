@@ -118,6 +118,7 @@ class User < ApplicationRecord
   # rubocop:enable Rails/HasManyOrHasOneDependent
 
   before_validation :set_password_and_uid, on: :create
+  before_destroy :prevent_deleting_administrator_user, prepend: true
   after_destroy :remove_macros
   after_save :sync_user_sessions, if: :saved_change_to_tokens?
 
@@ -156,6 +157,22 @@ class User < ApplicationRecord
       .deliver_later
   end
   private :send_reset_password_instructions_notification
+
+  def prevent_deleting_administrator_user
+    has_administrator_membership = false
+    Rbac::MembershipLockService.with_user_memberships(user_id: id) do |_accounts, _user, memberships|
+      has_administrator_membership = memberships.any?(&:administrator?)
+    end
+    return true unless has_administrator_membership
+
+    errors.add(:base, I18n.t('errors.user.administrator_membership_must_be_removed'))
+    throw :abort
+  end
+  private :prevent_deleting_administrator_user
+
+  def native_administrator_memberships
+    account_users.administrator
+  end
 
   def set_password_and_uid
     self.uid = email

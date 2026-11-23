@@ -31,6 +31,43 @@ RSpec.describe DataImportJob do
   end
 
   describe 'importing data' do
+    it 'fails closed when the import has no authenticated account initiator' do
+      unowned_import = create(:data_import, initiated_by: nil)
+
+      described_class.perform_now(unowned_import)
+
+      expect(unowned_import.account.contacts).to be_empty
+      expect(unowned_import.reload).to have_attributes(status: 'failed')
+    end
+
+    it 'fails before processing when the initiating managed agent loses contacts.import' do
+      agent = create(:user, account: data_import.account, role: :agent)
+      account_user = data_import.account.account_users.find_by!(user: agent)
+      role = RbacRole.create!(account: data_import.account, name: 'Contacts importer')
+      role.role_permissions.create!(permission_key: 'contacts.import', scope_type: 'all_in_account')
+      account_user.update!(rbac_managed: true, rbac_role: role)
+      managed_import = create(:data_import, account: data_import.account, initiated_by: agent)
+      role.role_permissions.destroy_all
+
+      described_class.perform_now(managed_import)
+
+      expect(managed_import.account.contacts).to be_empty
+      expect(managed_import.reload).to have_attributes(status: 'failed')
+    end
+
+    it 'stops before the next 100-contact batch after import permission is revoked' do
+      rows = (1..101).map { |index| ["Contact #{index}", "contact#{index}@example.com"] }
+      batch_import = create(:data_import, import_file: generate_csv_file([%w[name email]] + rows))
+      authorization = instance_double(DataImports::Authorization)
+      allow(DataImports::Authorization).to receive(:new).with(batch_import).and_return(authorization)
+      allow(authorization).to receive(:allowed_to_run?).and_return(true, true, false)
+      expect(AdministratorNotifications::AccountNotificationMailer).not_to receive(:with)
+
+      expect { described_class.perform_now(batch_import) }.to change { batch_import.account.contacts.count }.by(100)
+
+      expect(batch_import.reload).to have_attributes(status: 'failed')
+    end
+
     context 'when the data is valid' do
       it 'imports data into the account' do
         csv_length = CSV.parse(data_import.import_file.download, headers: true).length

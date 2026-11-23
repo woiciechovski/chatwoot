@@ -1,10 +1,11 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { getInboxIconByType } from 'dashboard/helper/inbox';
 import { useRouter, useRoute } from 'vue-router';
 import { frontendURL, conversationUrl } from 'dashboard/helper/URLHelper.js';
 import { dynamicTime, shortTimestamp } from 'shared/helpers/timeHelper';
 import { useExactTimestamp } from 'shared/composables/useExactTimestamp';
+import { useProtectedContactMedia } from 'dashboard/composables/useProtectedContactMedia';
 
 import Icon from 'dashboard/components-next/icon/Icon.vue';
 import Avatar from 'dashboard/components-next/avatar/Avatar.vue';
@@ -32,6 +33,7 @@ const props = defineProps({
 });
 
 const exactTimestamp = useExactTimestamp();
+const { resolveProtectedContactMediaUrl } = useProtectedContactMedia();
 
 const router = useRouter();
 const route = useRoute();
@@ -42,8 +44,20 @@ const currentContact = computed(() => props.contact);
 
 const currentContactName = computed(() => currentContact.value?.name);
 const currentContactThumbnail = computed(() => currentContact.value?.thumbnail);
+const resolvedContactThumbnail = ref('');
 const currentContactStatus = computed(
   () => currentContact.value?.availabilityStatus
+);
+
+watch(
+  currentContactThumbnail,
+  async thumbnail => {
+    const resolvedThumbnail = await resolveProtectedContactMediaUrl(thumbnail);
+    if (thumbnail === currentContactThumbnail.value) {
+      resolvedContactThumbnail.value = resolvedThumbnail;
+    }
+  },
+  { immediate: true }
 );
 
 const inbox = computed(() => props.stateInbox);
@@ -100,7 +114,7 @@ const onCardClick = e => {
   >
     <Avatar
       :name="currentContactName"
-      :src="currentContactThumbnail"
+      :src="resolvedContactThumbnail"
       :size="24"
       :status="currentContactStatus"
       rounded-full

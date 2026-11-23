@@ -4,7 +4,7 @@ RSpec.describe Contacts::BulkActionService do
   subject(:service) { described_class.new(account: account, user: user, params: params) }
 
   let(:account) { create(:account) }
-  let(:user) { create(:user, account: account) }
+  let(:user) { create(:user, :administrator, account: account) }
 
   describe '#perform' do
     context 'when delete action is requested via action_name' do
@@ -14,7 +14,7 @@ RSpec.describe Contacts::BulkActionService do
         bulk_delete_service = instance_double(Contacts::BulkDeleteService, perform: true)
 
         expect(Contacts::BulkDeleteService).to receive(:new)
-          .with(account: account, contact_ids: [1, 2])
+          .with(hash_including(account: account, contact_ids: [1, 2], authorization: instance_of(Contacts::Authorization)))
           .and_return(bulk_delete_service)
 
         service.perform
@@ -28,7 +28,8 @@ RSpec.describe Contacts::BulkActionService do
         bulk_assign_service = instance_double(Contacts::BulkAssignLabelsService, perform: true)
 
         expect(Contacts::BulkAssignLabelsService).to receive(:new)
-          .with(account: account, contact_ids: [10, 20], labels: %w[vip support])
+          .with(hash_including(account: account, contact_ids: [10, 20], labels: %w[vip support],
+                               authorization: instance_of(Contacts::Authorization)))
           .and_return(bulk_assign_service)
 
         service.perform
@@ -42,7 +43,8 @@ RSpec.describe Contacts::BulkActionService do
         bulk_remove_service = instance_double(Contacts::BulkRemoveLabelsService, perform: true)
 
         expect(Contacts::BulkRemoveLabelsService).to receive(:new)
-          .with(account: account, contact_ids: [10, 20], labels: %w[vip])
+          .with(hash_including(account: account, contact_ids: [10, 20], labels: %w[vip],
+                               authorization: instance_of(Contacts::Authorization)))
           .and_return(bulk_remove_service)
 
         service.perform

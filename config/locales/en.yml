@@ -114,6 +114,15 @@ en:
     account_user:
       no_work_preference: Receive conversations or Receive voice calls must stay on
       invalid_work_preference: Receive conversations and Receive voice calls must be true or false
+      rbac_role_account_mismatch: must belong to the same account
+      rbac_role_agent_only: can only be assigned to an agent
+      rbac_role_inactive: must be active to be assigned
+      rbac_role_enterprise_conflict: cannot be combined with an Enterprise custom role
+      rbac_managed_cannot_revert: cannot be reverted to legacy authorization after assignment
+      last_administrator: an account must keep at least one native administrator
+    rbac_role_permission:
+      not_assignable: is not available for assignment
+      unsupported_scope: is not a supported scope
     account:
       not_authorized: You are not authorized to access this account
       email_limit_exceeded: The daily email limit for this account has been reached
@@ -121,6 +130,8 @@ en:
         invalid: is not a valid timezone
       support_email:
         invalid: is not a valid email address
+    user:
+      administrator_membership_must_be_removed: administrator memberships must be demoted before deleting a user
     validations:
       presence: must not be blank
     webhook:

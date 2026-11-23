@@ -1,6 +1,10 @@
 import types from '../mutation-types';
 import ContactNotesAPI from '../../api/contactNotes';
 import camelcaseKeys from 'camelcase-keys';
+import {
+  clearContactReadCaches,
+  isContactReadDenied,
+} from './contactReadCache';
 
 export const state = {
   records: {},
@@ -33,6 +37,7 @@ export const actions = {
       const { data } = await ContactNotesAPI.get(contactId);
       commit(types.SET_CONTACT_NOTES, { contactId, data });
     } catch (error) {
+      if (isContactReadDenied(error)) clearContactReadCaches(commit);
       throw new Error(error);
     } finally {
       commit(types.SET_CONTACT_NOTES_UI_FLAG, { isFetching: false });
@@ -77,6 +82,14 @@ export const mutations = {
       ...$state.records,
       [contactId]: data,
     };
+  },
+  [types.CLEAR_CONTACT_NOTES]($state, contactId) {
+    const remainingRecords = { ...$state.records };
+    delete remainingRecords[contactId];
+    $state.records = remainingRecords;
+  },
+  [types.CLEAR_ALL_CONTACT_NOTES]($state) {
+    $state.records = {};
   },
   [types.ADD_CONTACT_NOTE]($state, { data, contactId }) {
     const contactNotes = $state.records[contactId] || [];

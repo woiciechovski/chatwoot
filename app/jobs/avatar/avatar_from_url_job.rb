@@ -15,7 +15,9 @@ class Avatar::AvatarFromUrlJob < ApplicationJob
   MAX_DOWNLOAD_SIZE = 15.megabytes
   RATE_LIMIT_WINDOW = 1.minute
 
-  def perform(avatarable, avatar_url)
+  def perform(avatarable, avatar_url, authorization = nil)
+    @authorization = authorization.to_h.with_indifferent_access if authorization.present?
+    return unless avatar_authorized?(avatarable)
     return unless syncable_avatar?(avatarable, avatar_url)
 
     fetch_and_attach_avatar(avatarable, avatar_url)
@@ -24,7 +26,7 @@ class Avatar::AvatarFromUrlJob < ApplicationJob
   rescue SafeFetch::Error => e
     Rails.logger.error "AvatarFromUrlJob error for #{avatar_url}: #{e.class} - #{e.message}"
   ensure
-    update_avatar_sync_attributes(avatarable, avatar_url)
+    update_avatar_sync_attributes(avatarable, avatar_url) if avatar_authorized?(avatarable)
   end
 
   private
@@ -47,6 +49,7 @@ class Avatar::AvatarFromUrlJob < ApplicationJob
   end
 
   def attach_avatar(avatarable, avatar_file)
+    return unless !avatarable.is_a?(Contact) || contact_avatar_authorized?(avatarable)
     raise SafeFetch::FetchError, 'Invalid file' unless valid_file?(avatar_file)
 
     avatarable.avatar.attach(
@@ -54,6 +57,16 @@ class Avatar::AvatarFromUrlJob < ApplicationJob
       filename: avatar_file.original_filename,
       content_type: avatar_file.content_type
     )
+  end
+
+  def contact_avatar_authorized?(contact)
+    return false if @authorization.blank?
+
+    Contacts::Authorization.new(account: contact.account, user_id: @authorization[:user_id]).avatar_allowed?(contact, @authorization)
+  end
+
+  def avatar_authorized?(avatarable)
+    !avatarable.is_a?(Contact) || contact_avatar_authorized?(avatarable)
   end
 
   def log_http_error(avatar_url, error)

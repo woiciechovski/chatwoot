@@ -26,6 +26,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  readOnly: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const emit = defineEmits(['update']);
@@ -297,6 +301,7 @@ defineExpose({
             v-if="item.key === 'COUNTRY'"
             v-model="state.additionalAttributes.countryCode"
             :options="countryOptions"
+            :disabled="readOnly"
             :placeholder="item.placeholder"
             class="[&>div>button]:h-8"
             :class="{
@@ -311,6 +316,7 @@ defineExpose({
             v-model="getFormBinding(item.key).value"
             :placeholder="item.placeholder"
             :show-border="isDetailsView"
+            :disabled="readOnly"
           />
           <div
             v-else-if="item.key === 'COMPANY_NAME' && hasCompaniesFeature"
@@ -320,6 +326,7 @@ defineExpose({
               :model-value="state.companyId"
               :selected-name="state.additionalAttributes.companyName"
               :is-details-view="isDetailsView"
+              :disabled="readOnly"
               @select="handleCompanySelection"
             />
           </div>
@@ -327,6 +334,7 @@ defineExpose({
             v-else
             v-model="getFormBinding(item.key).value"
             :placeholder="item.placeholder"
+            :disabled="readOnly"
             :message-type="getMessageType(item.key)"
             :custom-input-class="`h-8 !pt-1 !pb-1 ${
               !isDetailsView
@@ -371,6 +379,7 @@ defineExpose({
             class="w-auto min-w-[100px] text-sm bg-transparent outline-none reset-base text-n-slate-12 dark:text-n-slate-12 placeholder:text-n-slate-10 dark:placeholder:text-n-slate-10"
             :placeholder="item.placeholder"
             :size="item.placeholder.length"
+            :disabled="readOnly"
             @input="handleSocialProfileInput(item)"
           />
         </div>

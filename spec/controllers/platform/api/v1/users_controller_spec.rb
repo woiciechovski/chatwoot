@@ -275,6 +275,64 @@ RSpec.describe 'Platform Users API', type: :request do
                headers: { api_access_token: platform_app.access_token.token }, as: :json
         expect(response).to have_http_status(:success)
       end
+
+      it 'does not enqueue deletion of a user with an administrator membership' do
+        account_user = create(:account_user, role: :administrator)
+        create(:platform_app_permissible, platform_app: platform_app, permissible: account_user.user)
+
+        delete "/platform/api/v1/users/#{account_user.user_id}",
+               headers: { api_access_token: platform_app.access_token.token }, as: :json
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(DeleteObjectJob).not_to have_been_enqueued
+        expect(account_user.user).to be_persisted
+      end
+
+      it 'does not enqueue deletion when the administrator membership belongs to a suspended account' do
+        account_user = create(:account_user, role: :administrator)
+        account_user.account.update!(status: :suspended)
+        create(:platform_app_permissible, platform_app: platform_app, permissible: account_user.user)
+
+        delete "/platform/api/v1/users/#{account_user.user_id}",
+               headers: { api_access_token: platform_app.access_token.token }, as: :json
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(DeleteObjectJob).not_to have_been_enqueued
+        expect(account_user.user).to be_persisted
+      end
+
+      it 'records one local denial event per linked account without exposing cross-account membership IDs' do
+        target = create(:user)
+        accounts = create_list(:account, 2)
+        memberships = accounts.map { |account| create(:account_user, account: account, user: target, role: :administrator) }
+        accounts.each { |account| create(:account_user, account: account, role: :administrator) }
+        accounts.last.update!(status: :suspended)
+        create(:platform_app_permissible, platform_app: platform_app, permissible: target)
+
+        delete "/platform/api/v1/users/#{target.id}",
+               headers: { api_access_token: platform_app.access_token.token }, as: :json
+
+        events = RbacAuditEvent.where(action: 'user.delete.denied').order(:account_id)
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(events.pluck(:account_id)).to eq(accounts.map(&:id).sort)
+        expect(events.pluck(:actor_type, :actor_id).uniq).to eq([['PlatformApp', platform_app.id]])
+        expect(events.pluck(:target_type).uniq).to eq(['AccountUser'])
+        expect(events.pluck(:target_id)).to eq(memberships.sort_by(&:account_id).map(&:id))
+        expect(memberships.map(&:account_id).sort).to eq(accounts.map(&:id).sort)
+        expect(User.exists?(target.id)).to be(true)
+      end
+
+      it 'keeps a denial when recording its audit events fails' do
+        account_user = create(:account_user, role: :administrator)
+        create(:platform_app_permissible, platform_app: platform_app, permissible: account_user.user)
+        allow(Rbac::AuditEvents::Recorder).to receive(:record_denied!).and_raise(ActiveRecord::RecordNotSaved)
+
+        delete "/platform/api/v1/users/#{account_user.user_id}",
+               headers: { api_access_token: platform_app.access_token.token }, as: :json
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(User.exists?(account_user.user_id)).to be(true)
+      end
     end
   end
 end

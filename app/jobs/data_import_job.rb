@@ -11,9 +11,13 @@ class DataImportJob < ApplicationJob
 
   def perform(data_import)
     @data_import = data_import
+    return fail_unauthorized_import unless import_authorized?
+
     @contact_manager = DataImport::ContactManager.new(@data_import.account)
     begin
-      process_import_file
+      return unless process_import_file
+      return fail_unauthorized_import unless import_authorized?
+
       send_import_notification_to_admin
     rescue CSV::MalformedCSVError => e
       handle_csv_error(e)
@@ -26,19 +30,23 @@ class DataImportJob < ApplicationJob
     @data_import.update!(status: :processing)
     contacts, rejected_contacts = parse_csv_and_build_contacts
 
-    import_contacts(contacts)
+    unless import_contacts(contacts)
+      fail_unauthorized_import
+      return false
+    end
+    return false unless import_authorized?
+
     update_data_import_status(contacts.length, rejected_contacts.length)
     save_failed_records_csv(rejected_contacts)
+    true
   end
 
   def parse_csv_and_build_contacts
     contacts = []
     rejected_contacts = []
 
-    with_import_file do |file|
-      csv_reader(file).each do |row|
-        build_contact_from_row(row, contacts, rejected_contacts)
-      end
+    DataImports::CsvFile.new(@data_import).each_row do |row|
+      build_contact_from_row(row, contacts, rejected_contacts)
     end
 
     [contacts, rejected_contacts]
@@ -72,10 +80,16 @@ class DataImportJob < ApplicationJob
   end
 
   def import_contacts(contacts_with_labels)
-    contacts = contacts_with_labels.pluck(:contact)
-    # <struct ActiveRecord::Import::Result failed_instances=[], num_inserts=1, ids=[444, 445], results=[]>
-    Contact.import(contacts, synchronize: contacts, on_duplicate_key_ignore: true, track_validation_failures: true, validate: true, batch_size: 1000)
-    apply_labels_to_contacts(contacts_with_labels)
+    contacts_with_labels.each_slice(100) do |batch|
+      return false unless import_authorized?
+
+      contacts = batch.pluck(:contact)
+      # <struct ActiveRecord::Import::Result failed_instances=[], num_inserts=1, ids=[444, 445], results=[]>
+      Contact.import(contacts, synchronize: contacts, on_duplicate_key_ignore: true, track_validation_failures: true, validate: true, batch_size: 100)
+      apply_labels_to_contacts(batch)
+    end
+
+    true
   end
 
   def apply_labels_to_contacts(contacts_with_labels)
@@ -189,30 +203,14 @@ class DataImportJob < ApplicationJob
   end
 
   def csv_headers
-    header_row = nil
-    with_import_file do |file|
-      header_row = csv_reader(file).first
-    end
-    header_row&.headers || []
+    DataImports::CsvFile.new(@data_import).headers
   end
 
-  def csv_reader(file)
-    file.rewind
-    raw_data = file.read
-    utf8_data = raw_data.force_encoding('UTF-8')
-    clean_data = utf8_data.valid_encoding? ? utf8_data : utf8_data.encode('UTF-16le', invalid: :replace, replace: '').encode('UTF-8')
-    clean_data = clean_data.delete_prefix("\xEF\xBB\xBF")
-
-    CSV.new(StringIO.new(clean_data), headers: true)
+  def import_authorized?
+    DataImports::Authorization.new(@data_import).allowed_to_run?
   end
 
-  def with_import_file
-    temp_dir = Rails.root.join('tmp/imports')
-    FileUtils.mkdir_p(temp_dir)
-
-    @data_import.import_file.open(tmpdir: temp_dir) do |file|
-      file.binmode
-      yield file
-    end
+  def fail_unauthorized_import
+    @data_import.update!(status: :failed, last_error_at: Time.current)
   end
 end

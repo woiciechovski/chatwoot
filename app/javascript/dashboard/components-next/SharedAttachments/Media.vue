@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAlert } from 'dashboard/composables';
 import {
@@ -21,6 +21,7 @@ const props = defineProps({
   attachments: { type: Array, default: () => [] },
   peekLimit: { type: Number, default: 0 },
   showJumpToMessage: { type: Boolean, default: false },
+  resolveMediaUrl: { type: Function, default: null },
 });
 
 const emit = defineEmits(['select', 'jumpToMessage']);
@@ -40,6 +41,7 @@ const failedThumbs = ref(new Set());
 const failedPreviews = ref(new Set());
 const durations = ref({});
 const downloadingId = ref(null);
+const resolvedMediaUrls = ref({});
 
 const isPeekable = computed(() => props.peekLimit > 0);
 
@@ -71,11 +73,43 @@ const imagePreviewSrc = ({
   thumb_url: thumbUrl,
   data_url: dataUrl,
 }) => {
+  if (props.resolveMediaUrl) return resolvedMediaUrls.value[id] || null;
   const canUseThumb = thumbUrl && !failedThumbs.value.has(id);
   if (type === ATTACHMENT_TYPES.IMAGE) return canUseThumb ? thumbUrl : dataUrl;
   if (isVideoType(type)) return canUseThumb ? thumbUrl : null;
   return null;
 };
+
+const mediaSource = attachment => {
+  if (!props.resolveMediaUrl) return attachment.data_url;
+  return resolvedMediaUrls.value[attachment.id] || '';
+};
+
+watch(
+  visibleMedia,
+  async visibleAttachments => {
+    if (!props.resolveMediaUrl) return;
+
+    const imageAttachments = visibleAttachments.filter(attachment => {
+      if (attachment.file_type !== ATTACHMENT_TYPES.IMAGE) return false;
+      if (attachment.thumb_url) return true;
+      return !attachment.data_url.startsWith('/api/v1/accounts/');
+    });
+    const resolvedUrls = await Promise.all(
+      imageAttachments.map(async attachment => [
+        attachment.id,
+        await props.resolveMediaUrl(
+          attachment.thumb_url || attachment.data_url
+        ),
+      ])
+    );
+    resolvedMediaUrls.value = {
+      ...resolvedMediaUrls.value,
+      ...Object.fromEntries(resolvedUrls.filter(([, url]) => url)),
+    };
+  },
+  { immediate: true }
+);
 
 const onPreviewError = ({
   id,
@@ -89,6 +123,16 @@ const onPreviewError = ({
     (type === ATTACHMENT_TYPES.IMAGE || isVideoType(type))
   ) {
     failedThumbs.value.add(id);
+    if (props.resolveMediaUrl) {
+      props.resolveMediaUrl(dataUrl).then(sourceUrl => {
+        if (sourceUrl) {
+          resolvedMediaUrls.value = {
+            ...resolvedMediaUrls.value,
+            [id]: sourceUrl,
+          };
+        }
+      });
+    }
     return;
   }
   failedPreviews.value.add(id);
@@ -100,6 +144,7 @@ const hasPreview = attachment =>
 const hasVideoPreview = attachment =>
   isVideoType(attachment.file_type) &&
   attachment.data_url &&
+  mediaSource(attachment) &&
   !failedPreviews.value.has(attachment.id);
 
 const fallbackIcon = type => {
@@ -131,19 +176,28 @@ const isOverflowTile = index =>
   overflow.value > 0 &&
   index === props.peekLimit - 1;
 
-const onTileActivate = (attachment, index) => {
+const onTileActivate = async (attachment, index) => {
   if (isOverflowTile(index)) {
     showAll.value = true;
     return;
   }
-  emit('select', attachment);
+  if (!props.resolveMediaUrl) {
+    emit('select', attachment);
+    return;
+  }
+
+  const sourceUrl = await props.resolveMediaUrl(attachment.data_url);
+  if (sourceUrl) emit('select', { ...attachment, data_url: sourceUrl });
 };
 
 const onDownloadFile = async attachment => {
   const { id, file_type: type, data_url: url, extension } = attachment;
   try {
     downloadingId.value = id;
-    await downloadFile({ url, type, extension });
+    const downloadUrl = props.resolveMediaUrl
+      ? await props.resolveMediaUrl(url)
+      : url;
+    await downloadFile({ url: downloadUrl, type, extension });
   } catch (error) {
     useAlert(t('CONVERSATION_SIDEBAR.SHARED_FILES.DOWNLOAD_ERROR'));
   } finally {
@@ -202,7 +256,7 @@ const onDownloadFile = async attachment => {
           />
           <video
             v-else-if="hasVideoPreview(attachment)"
-            :src="`${attachment.data_url}#t=0.1`"
+            :src="`${mediaSource(attachment)}#t=0.1`"
             preload="metadata"
             muted
             playsinline
@@ -221,8 +275,8 @@ const onDownloadFile = async attachment => {
           </div>
 
           <audio
-            v-if="isAudioType(attachment.file_type) && attachment.data_url"
-            :src="attachment.data_url"
+            v-if="isAudioType(attachment.file_type) && mediaSource(attachment)"
+            :src="mediaSource(attachment)"
             preload="metadata"
             class="hidden"
             @loadedmetadata="onLoadedMetadata(attachment, $event)"

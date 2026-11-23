@@ -33,7 +33,17 @@ RSpec.describe '/api/v1/widget/contacts', type: :request do
               as: :json
 
         expect(response).to have_http_status(:success)
-        expected_params = { contact: contact, params: params, discard_invalid_attrs: true }
+        avatar_authorization_context = Contacts::Authorization.system_avatar_context(
+          contact: contact,
+          inbox: web_widget.inbox,
+          origin: 'contact_identify_action'
+        )
+        expected_params = {
+          contact: contact,
+          params: params,
+          discard_invalid_attrs: true,
+          avatar_authorization_context: avatar_authorization_context
+        }
         expect(ContactIdentifyAction).to have_received(:new).with(expected_params)
         expect(identify_action).to have_received(:perform)
       end

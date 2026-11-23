@@ -33,11 +33,40 @@ class Platform::Api::V1::UsersController < PlatformController
   end
 
   def destroy
-    DeleteObjectJob.perform_later(@resource)
+    user_to_delete, denial_memberships, accounts_by_id = user_deletion_state
+    return deny_user_deletion(denial_memberships, accounts_by_id) if denial_memberships.any?
+
+    DeleteObjectJob.perform_later(user_to_delete)
     head :ok
   end
 
   private
+
+  def user_deletion_state
+    user_to_delete = nil
+    denial_memberships = []
+    accounts_by_id = {}
+    Rbac::MembershipLockService.with_user_memberships(user_id: @resource.id) do |accounts, user, memberships|
+      denial_memberships = memberships.select(&:administrator?)
+      accounts_by_id = accounts.index_by(&:id)
+      user_to_delete = user if denial_memberships.empty?
+    end
+    [user_to_delete, denial_memberships, accounts_by_id]
+  end
+
+  def deny_user_deletion(memberships, accounts_by_id)
+    memberships.each do |membership|
+      Rbac::AuditEvents::Recorder.record_denied_safely!(
+        account: accounts_by_id.fetch(membership.account_id),
+        actor: @platform_app,
+        action: 'user.delete.denied',
+        target_type: 'AccountUser',
+        target_id: membership.id,
+        metadata: { request_id: request.request_id }
+      )
+    end
+    render json: { error: I18n.t('errors.user.administrator_membership_must_be_removed') }, status: :unprocessable_entity
+  end
 
   def user_custom_attributes
     return @resource.custom_attributes.merge(user_params[:custom_attributes]) if user_params[:custom_attributes]

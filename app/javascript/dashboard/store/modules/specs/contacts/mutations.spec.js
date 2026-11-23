@@ -3,6 +3,22 @@ import Contacts from '../../contacts';
 const { mutations } = Contacts;
 
 describe('#mutations', () => {
+  describe('#CLEAR_CONTACTS', () => {
+    it('clears cached contacts and pagination metadata after a denied read', () => {
+      const state = {
+        records: { 1: { id: 1, name: 'Previously loaded contact' } },
+        sortOrder: [1],
+        meta: { count: 12, currentPage: 2, hasMore: true },
+      };
+
+      mutations[types.CLEAR_CONTACTS](state);
+
+      expect(state.records).toEqual({});
+      expect(state.sortOrder).toEqual([]);
+      expect(state.meta).toEqual({ count: 0, currentPage: 1, hasMore: false });
+    });
+  });
+
   describe('#SET_CONTACTS', () => {
     it('set contact records', () => {
       const state = { records: {} };
@@ -47,6 +63,23 @@ describe('#mutations', () => {
     });
   });
 
+  describe('#CLEAR_CONTACT_ITEM', () => {
+    it('removes only the denied contact when route IDs are strings', () => {
+      const state = {
+        records: {
+          1: { id: 1, name: 'Allowed contact' },
+          2: { id: 2, name: 'Previously loaded private contact' },
+        },
+        sortOrder: [1, 2],
+      };
+
+      mutations[types.CLEAR_CONTACT_ITEM](state, '2');
+
+      expect(state.records).toEqual({ 1: { id: 1, name: 'Allowed contact' } });
+      expect(state.sortOrder).toEqual([1]);
+    });
+  });
+
   describe('#EDIT_CONTACT', () => {
     it('update contact', () => {
       const state = {
@@ -77,6 +110,23 @@ describe('#mutations', () => {
         name: 'contact2',
         attachments,
       });
+    });
+
+    it('drops cached contact fields and attachments for an id-only response', () => {
+      const state = {
+        records: {
+          1: {
+            id: 1,
+            name: 'Private contact',
+            email: 'private@example.com',
+            attachments: [{ id: 11, file_type: 'image' }],
+          },
+        },
+      };
+
+      mutations[types.EDIT_CONTACT](state, { id: 1 });
+
+      expect(state.records).toEqual({ 1: { id: 1 } });
     });
   });
 

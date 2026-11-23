@@ -7,7 +7,11 @@
 
 class ContactIdentifyAction
   include UrlHelper
-  pattr_initialize [:contact!, :params!, { retain_original_contact_name: false, discard_invalid_attrs: false }]
+  pattr_initialize [:contact!, :params!, {
+    retain_original_contact_name: false,
+    discard_invalid_attrs: false,
+    avatar_authorization_context: nil
+  }]
 
   # Details the request sent that matched another identified contact, so they were not saved
   attr_reader :unverified_matches
@@ -109,6 +113,7 @@ class ContactIdentifyAction
   end
 
   def update_contact
+    @contact.avatar_authorization_context = @avatar_authorization_context if @avatar_authorization_context.present?
     @contact.attributes = params.slice(*@attributes_to_update).reject do |_k, v|
       v.blank?
     end.merge({ custom_attributes: custom_attributes, additional_attributes: additional_attributes })
@@ -123,7 +128,8 @@ class ContactIdentifyAction
     return unless params[:avatar_url].present? && !@contact.avatar.attached?
     return unless url_valid?(params[:avatar_url])
 
-    Avatar::AvatarFromUrlJob.perform_later(@contact, params[:avatar_url])
+    authorization = @avatar_authorization_context&.to_h&.merge(principal_contact_id: @contact.id)
+    Avatar::AvatarFromUrlJob.perform_later(@contact, params[:avatar_url], authorization)
   end
 
   def merge_contact(base_contact, merge_contact)

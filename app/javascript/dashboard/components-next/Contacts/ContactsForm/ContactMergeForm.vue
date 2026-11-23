@@ -1,9 +1,11 @@
 <script setup>
 import Avatar from 'dashboard/components-next/avatar/Avatar.vue';
 import ComboBox from 'dashboard/components-next/combobox/ComboBox.vue';
+import { ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
+import { useProtectedContactMedia } from 'dashboard/composables/useProtectedContactMedia';
 
-defineProps({
+const props = defineProps({
   selectedContact: {
     type: Object,
     required: true,
@@ -33,6 +35,16 @@ defineProps({
 const emit = defineEmits(['update:primaryContactId', 'search']);
 
 const { t } = useI18n();
+const { resolveProtectedContactMediaUrl } = useProtectedContactMedia();
+const protectedAvatarUrl = ref('');
+
+watch(
+  () => props.selectedContact.thumbnail,
+  async sourceUrl => {
+    protectedAvatarUrl.value = await resolveProtectedContactMediaUrl(sourceUrl);
+  },
+  { immediate: true }
+);
 </script>
 
 <template>
@@ -95,7 +107,7 @@ const { t } = useI18n();
       >
         <Avatar
           :name="selectedContact.name || ''"
-          :src="selectedContact.thumbnail || ''"
+          :src="protectedAvatarUrl"
           :size="32"
           rounded-full
         />

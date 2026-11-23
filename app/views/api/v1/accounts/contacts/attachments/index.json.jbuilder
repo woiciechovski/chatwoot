@@ -3,6 +3,7 @@ json.meta do
 end
 
 json.payload @attachments do |attachment|
-  json.partial! 'api/v1/models/attachment', formats: [:json], attachment: attachment
+  json.partial! 'api/v1/accounts/contacts/attachments/attachment', formats: [:json],
+                attachment: attachment, contact_id: @contact.id
   json.conversation_id attachment.message.conversation.display_id
 end

@@ -22,12 +22,14 @@ class AgentBuilder
   # Creates a user and account user in a transaction.
   # @return [User] the created user.
   def perform
-    account.with_lock do
-      raise LimitExceededError unless can_add_agent?
+    Rbac::MembershipLockService.with_account(account_id: account.id) do |locked_account|
+      raise LimitExceededError unless can_add_agent?(locked_account)
 
       ActiveRecord::Base.transaction(requires_new: true) do
         @user = find_or_create_user
-        create_account_user
+        Rbac::MembershipLockService.with_membership(account_id: locked_account.id, user_id: @user.id) do
+          create_account_user
+        end
         reserve_invitation_email_capacity if user_needs_confirmation?
       end
     end
@@ -37,8 +39,8 @@ class AgentBuilder
 
   private
 
-  def can_add_agent?
-    account.usage_limits[:agents] > account.account_users.count
+  def can_add_agent?(locked_account)
+    locked_account.usage_limits[:agents] > locked_account.account_users.count
   end
 
   # Finds a user by email or creates a new one with a temporary password.

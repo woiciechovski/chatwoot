@@ -1,54 +1,90 @@
 class ContactPolicy < ApplicationPolicy
   def index?
-    true
+    contacts_permission?('contacts.read') { true }
   end
 
   def active?
-    true
+    contacts_permission?('contacts.read') { true }
   end
 
   def import?
-    @account_user.administrator?
+    contacts_permission?('contacts.import') { @account_user.administrator? }
   end
 
   def export?
-    @account_user.administrator?
+    contacts_permissions?(%w[contacts.read contacts.export]) { @account_user.administrator? }
   end
 
   def search?
-    true
+    contacts_permission?('contacts.read') { true }
   end
 
   def filter?
-    true
+    contacts_permission?('contacts.read') { true }
   end
 
   def update?
-    true
+    contacts_permission?('contacts.update') { true }
   end
 
   def contactable_inboxes?
-    true
+    contacts_permission?('contacts.read') { true }
   end
 
   def destroy_custom_attributes?
-    true
+    contacts_permission?('contacts.update') { true }
   end
 
   def show?
-    true
+    contacts_permission?('contacts.read') { true }
   end
 
   def create?
-    true
+    contacts_permission?('contacts.create') { true }
   end
 
   def avatar?
-    true
+    contacts_permission?('contacts.update') { true }
   end
 
   def destroy?
-    @account_user.administrator?
+    contacts_permission?('contacts.delete') { @account_user.administrator? }
+  end
+
+  def merge?
+    contacts_permissions?(%w[contacts.read contacts.update contacts.delete]) { true }
+  end
+
+  private
+
+  def contacts_permission?(permission)
+    return false unless valid_account_context?
+    if @account_user.rbac_managed?
+      return Rbac::Authorizer.allowed?(account_user: @account_user, permission: permission, resource: authorization_resource)
+    end
+
+    yield
+  end
+
+  def contacts_permissions?(permissions)
+    return false unless valid_account_context?
+    return yield unless @account_user.rbac_managed?
+
+    permissions.all? do |permission|
+      Rbac::Authorizer.allowed?(account_user: @account_user, permission: permission, resource: authorization_resource)
+    end
+  end
+
+  def valid_account_context?
+    return false unless @account_user.is_a?(AccountUser) && @account_user.persisted?
+    return false unless @account.present? && @account_user.account_id == @account.id
+    return false if authorization_resource && authorization_resource.account_id != @account_user.account_id
+
+    true
+  end
+
+  def authorization_resource
+    @record if @record.is_a?(Contact)
   end
 end
 

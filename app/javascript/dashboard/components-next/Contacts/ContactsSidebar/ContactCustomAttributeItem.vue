@@ -19,6 +19,10 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  disabled: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const store = useStore();
@@ -26,6 +30,7 @@ const { t } = useI18n();
 const route = useRoute();
 
 const handleDelete = async () => {
+  if (props.disabled) return;
   try {
     await store.dispatch('contacts/deleteCustomAttributes', {
       id: route.params.contactId,
@@ -43,6 +48,7 @@ const handleDelete = async () => {
 };
 
 const handleUpdate = async value => {
+  if (props.disabled) return;
   try {
     await store.dispatch('contacts/update', {
       id: route.params.contactId,
@@ -88,6 +94,7 @@ const CurrentAttributeComponent = computed(() => {
       :is="CurrentAttributeComponent"
       :attribute="attribute"
       :is-editing-view="isEditingView"
+      :disabled="disabled"
       @update="handleUpdate"
       @delete="handleDelete"
     />

@@ -63,6 +63,26 @@ RSpec.describe 'Platform Account Users API', type: :request do
         data = response.parsed_body
         expect(data['role']).to eq('administrator')
       end
+
+      it 'does not demote the last administrator' do
+        create(:platform_app_permissible, platform_app: platform_app, permissible: account)
+        account_user = create(:account_user, account: account, role: 'administrator')
+
+        post "/platform/api/v1/accounts/#{account.id}/account_users",
+             params: { user_id: account_user.user_id, role: 'agent' },
+             headers: { api_access_token: platform_app.access_token.token }, as: :json
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(account_user.reload).to be_administrator
+        expect(RbacAuditEvent.last).to have_attributes(
+          account: account,
+          actor: platform_app,
+          action: 'administrator.demotion.denied',
+          target_type: 'AccountUser',
+          target_id: account_user.id,
+          result: 'denied'
+        )
+      end
     end
   end
 
@@ -87,6 +107,25 @@ RSpec.describe 'Platform Account Users API', type: :request do
 
         expect(response).to have_http_status(:success)
         expect(account.account_users.count).to eq 0
+      end
+
+      it 'does not remove the last administrator' do
+        create(:platform_app_permissible, platform_app: platform_app, permissible: account)
+        account_user.update!(role: :administrator)
+
+        delete "/platform/api/v1/accounts/#{account.id}/account_users", params: { user_id: account_user.user_id },
+                                                                        headers: { api_access_token: platform_app.access_token.token }, as: :json
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(account_user.reload).to be_administrator
+        expect(RbacAuditEvent.last).to have_attributes(
+          account: account,
+          actor: platform_app,
+          action: 'administrator.removal.denied',
+          target_type: 'AccountUser',
+          target_id: account_user.id,
+          result: 'denied'
+        )
       end
     end
   end

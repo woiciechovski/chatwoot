@@ -81,6 +81,18 @@ RSpec.describe 'Shopify Integration API', type: :request do
         expect(Shopify::ApiContext).to have_received(:setup!)
       end
 
+      it 'requires contacts.read before looking up Shopify customer data' do
+        agent.account_users.find_by!(account: account).update!(rbac_managed: true)
+
+        get "/api/v1/accounts/#{account.id}/integrations/shopify/orders",
+            params: { contact_id: contact.id },
+            headers: agent.create_new_auth_token,
+            as: :json
+
+        expect(response).to have_http_status(:unauthorized)
+        expect(shopify_client).not_to have_received(:get)
+      end
+
       it 'returns error when contact has no email or phone' do
         contact_without_info = create(:contact, account: account)
 

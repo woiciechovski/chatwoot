@@ -11,6 +11,10 @@ const props = defineProps({
     type: [String, Number],
     default: null,
   },
+  readOnly: {
+    type: Boolean,
+    default: false,
+  },
 });
 
 const store = useStore();
@@ -125,10 +129,12 @@ const handleLabelHover = labelId => {
       :key="label.id"
       :label="label"
       :is-hovered="hoveredLabel === label.id"
+      :can-remove="!readOnly"
       @remove="handleRemoveLabel"
       @hover="handleLabelHover(label.id)"
     />
     <AddLabel
+      v-if="!readOnly"
       :label-menu-items="labelMenuItems"
       @update-label="handleLabelAction"
     />

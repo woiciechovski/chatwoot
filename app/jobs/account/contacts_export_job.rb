@@ -3,31 +3,47 @@ class Account::ContactsExportJob < ApplicationJob
 
   LABELS_COLUMN = 'labels'.freeze
   LABELS_DELIMITER = ','.freeze
+  BATCH_SIZE = 100
 
   def perform(account_id, user_id, column_names, params)
     @account = Account.find(account_id)
     @params = params
-    @account_user = @account.users.find(user_id)
+    @account_user = @account.account_users.includes(:user).find_by(user_id: user_id)
+    return unless @account_user
+    return unless export_authorized?
 
     headers = valid_headers(column_names)
-    generate_csv(headers)
+    csv_data = generate_csv(headers)
+    return unless csv_data
+    return unless export_authorized?
+
+    attach_export_file(csv_data)
+    return unless export_authorized?
+
     send_mail
   end
 
   private
 
   def generate_csv(headers)
-    contacts_to_export = contacts.to_a
-    preload_contact_labels(contacts_to_export) if headers.include?(LABELS_COLUMN)
-
+    authorized = true
     csv_data = CSVSafe.generate do |csv|
       csv << headers
-      contacts_to_export.each do |contact|
-        csv << headers.map { |header| value_for_header(contact, header) }
+      contacts.in_batches(of: BATCH_SIZE, load: true, error_on_ignore: false) do |batch|
+        unless export_authorized?
+          authorized = false
+          break
+        end
+
+        batch_contacts = batch.to_a
+        preload_contact_labels(batch_contacts) if headers.include?(LABELS_COLUMN)
+        batch_contacts.each do |contact|
+          csv << headers.map { |header| value_for_header(contact, header) }
+        end
       end
     end
 
-    attach_export_file(csv_data)
+    csv_data if authorized && export_authorized?
   end
 
   def value_for_header(contact, header)
@@ -94,11 +110,15 @@ class Account::ContactsExportJob < ApplicationJob
   def send_mail
     file_url = account_contact_export_url
     mailer = AdministratorNotifications::AccountNotificationMailer.with(account: @account)
-    mailer.contact_export_complete(file_url, @account_user.email)&.deliver_later
+    mailer.contact_export_complete(file_url, @account_user.user.email)&.deliver_later
   end
 
   def account_contact_export_url
-    Rails.application.routes.url_helpers.rails_blob_url(@account.contacts_export)
+    Rails.application.routes.url_helpers.export_download_api_v1_account_contacts_url(account_id: @account.id)
+  end
+
+  def export_authorized?
+    Contacts::Authorization.allowed?(account: @account, user_id: @account_user.user_id, permission: 'contacts.export')
   end
 
   def default_columns

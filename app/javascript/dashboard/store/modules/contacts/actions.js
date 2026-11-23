@@ -8,6 +8,18 @@ import ContactAPI from '../../../api/contacts';
 import AnalyticsHelper from '../../../helper/AnalyticsHelper';
 import { CONTACTS_EVENTS } from '../../../helper/AnalyticsHelper/events';
 import types from '../../mutation-types';
+import {
+  clearContactReadCaches,
+  isContactReadDenied,
+} from '../contactReadCache';
+
+const clearReadCachesAfterError = (commit, error) => {
+  if (isContactReadDenied(error)) {
+    clearContactReadCaches(commit);
+  } else {
+    commit(types.CLEAR_CONTACTS);
+  }
+};
 
 const buildContactFormData = contactParams => {
   const formData = new FormData();
@@ -38,6 +50,16 @@ const buildContactFormData = contactParams => {
   return formData;
 };
 
+const getContactFetchError = error => {
+  const message =
+    error.response?.data?.message ||
+    error.data?.message ||
+    error.data ||
+    error.message;
+
+  return typeof message === 'string' ? message : true;
+};
+
 export const handleContactOperationErrors = error => {
   if (error.response?.status === 422) {
     const exception = new DuplicateContactException(
@@ -57,7 +79,7 @@ export const actions = {
     { commit },
     { search, page, sortAttr, label, append = false }
   ) => {
-    commit(types.SET_CONTACT_UI_FLAG, { isFetching: true });
+    commit(types.SET_CONTACT_UI_FLAG, { isFetching: true, fetchError: null });
     try {
       const {
         data: { payload, meta },
@@ -67,14 +89,21 @@ export const actions = {
       }
       commit(append ? types.APPEND_CONTACTS : types.SET_CONTACTS, payload);
       commit(types.SET_CONTACT_META, meta);
-      commit(types.SET_CONTACT_UI_FLAG, { isFetching: false });
+      commit(types.SET_CONTACT_UI_FLAG, {
+        isFetching: false,
+        fetchError: null,
+      });
     } catch (error) {
-      commit(types.SET_CONTACT_UI_FLAG, { isFetching: false });
+      clearReadCachesAfterError(commit, error);
+      commit(types.SET_CONTACT_UI_FLAG, {
+        isFetching: false,
+        fetchError: getContactFetchError(error),
+      });
     }
   },
 
   get: async ({ commit }, { page = 1, sortAttr, label } = {}) => {
-    commit(types.SET_CONTACT_UI_FLAG, { isFetching: true });
+    commit(types.SET_CONTACT_UI_FLAG, { isFetching: true, fetchError: null });
     try {
       const {
         data: { payload, meta },
@@ -82,14 +111,21 @@ export const actions = {
       commit(types.CLEAR_CONTACTS);
       commit(types.SET_CONTACTS, payload);
       commit(types.SET_CONTACT_META, meta);
-      commit(types.SET_CONTACT_UI_FLAG, { isFetching: false });
+      commit(types.SET_CONTACT_UI_FLAG, {
+        isFetching: false,
+        fetchError: null,
+      });
     } catch (error) {
-      commit(types.SET_CONTACT_UI_FLAG, { isFetching: false });
+      clearReadCachesAfterError(commit, error);
+      commit(types.SET_CONTACT_UI_FLAG, {
+        isFetching: false,
+        fetchError: getContactFetchError(error),
+      });
     }
   },
 
   active: async ({ commit }, { page = 1, sortAttr } = {}) => {
-    commit(types.SET_CONTACT_UI_FLAG, { isFetching: true });
+    commit(types.SET_CONTACT_UI_FLAG, { isFetching: true, fetchError: null });
     try {
       const {
         data: { payload, meta },
@@ -97,14 +133,25 @@ export const actions = {
       commit(types.CLEAR_CONTACTS);
       commit(types.SET_CONTACTS, payload);
       commit(types.SET_CONTACT_META, meta);
-      commit(types.SET_CONTACT_UI_FLAG, { isFetching: false });
+      commit(types.SET_CONTACT_UI_FLAG, {
+        isFetching: false,
+        fetchError: null,
+      });
     } catch (error) {
-      commit(types.SET_CONTACT_UI_FLAG, { isFetching: false });
+      clearReadCachesAfterError(commit, error);
+      commit(types.SET_CONTACT_UI_FLAG, {
+        isFetching: false,
+        fetchError: getContactFetchError(error),
+      });
     }
   },
 
   show: async ({ commit }, { id }) => {
     commit(types.SET_CONTACT_UI_FLAG, { isFetchingItem: true });
+    commit(`contactNotes/${types.CLEAR_CONTACT_NOTES}`, id, { root: true });
+    commit(`contactConversations/${types.DELETE_CONTACT_CONVERSATION}`, id, {
+      root: true,
+    });
     try {
       const response = await ContactAPI.show(id);
       commit(types.SET_CONTACT_ITEM, response.data.payload);
@@ -112,9 +159,15 @@ export const actions = {
         isFetchingItem: false,
       });
     } catch (error) {
+      if (isContactReadDenied(error)) {
+        clearContactReadCaches(commit);
+      } else {
+        commit(types.CLEAR_CONTACT_ITEM, id);
+      }
       commit(types.SET_CONTACT_UI_FLAG, {
         isFetchingItem: false,
       });
+      handleContactOperationErrors(error);
     }
   },
 
@@ -126,6 +179,13 @@ export const actions = {
         id,
         data: response.data.payload,
       });
+    } catch (error) {
+      if (isContactReadDenied(error)) {
+        clearContactReadCaches(commit);
+      } else {
+        commit(types.SET_CONTACT_ATTACHMENTS, { id, data: [] });
+      }
+      handleContactOperationErrors(error);
     } finally {
       commit(types.SET_CONTACT_UI_FLAG, { isFetchingAttachments: false });
     }
@@ -148,9 +208,10 @@ export const actions = {
       );
       commit(types.EDIT_CONTACT, response.data.payload);
       commit(types.SET_CONTACT_UI_FLAG, { isUpdating: false });
+      return response.data.payload;
     } catch (error) {
       commit(types.SET_CONTACT_UI_FLAG, { isUpdating: false });
-      handleContactOperationErrors(error);
+      return handleContactOperationErrors(error);
     }
   },
 
@@ -227,6 +288,7 @@ export const actions = {
         customAttributes
       );
       commit(types.EDIT_CONTACT, response.data.payload);
+      return response.data.payload;
     } catch (error) {
       throw new Error(error);
     }
@@ -236,6 +298,7 @@ export const actions = {
     try {
       const response = await ContactAPI.destroyAvatar(id);
       commit(types.EDIT_CONTACT, response.data.payload);
+      return response.data.payload;
     } catch (error) {
       throw new Error(error);
     }
@@ -303,7 +366,7 @@ export const actions = {
     { commit },
     { page = 1, sortAttr, queryPayload, resetState = true } = {}
   ) => {
-    commit(types.SET_CONTACT_UI_FLAG, { isFetching: true });
+    commit(types.SET_CONTACT_UI_FLAG, { isFetching: true, fetchError: null });
     try {
       const {
         data: { payload, meta },
@@ -312,11 +375,18 @@ export const actions = {
         commit(types.CLEAR_CONTACTS);
         commit(types.SET_CONTACTS, payload);
         commit(types.SET_CONTACT_META, meta);
-        commit(types.SET_CONTACT_UI_FLAG, { isFetching: false });
+        commit(types.SET_CONTACT_UI_FLAG, {
+          isFetching: false,
+          fetchError: null,
+        });
       }
       return payload;
     } catch (error) {
-      commit(types.SET_CONTACT_UI_FLAG, { isFetching: false });
+      clearReadCachesAfterError(commit, error);
+      commit(types.SET_CONTACT_UI_FLAG, {
+        isFetching: false,
+        fetchError: getContactFetchError(error),
+      });
     }
     return [];
   },

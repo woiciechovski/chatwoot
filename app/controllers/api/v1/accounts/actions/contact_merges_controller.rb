@@ -1,6 +1,7 @@
 class Api::V1::Accounts::Actions::ContactMergesController < Api::V1::Accounts::BaseController
   before_action :set_base_contact, only: [:create]
   before_action :set_mergee_contact, only: [:create]
+  before_action :authorize_contact_merge!, only: [:create]
 
   def create
     Rails.logger.info "[CONTACT_MERGE] Agent #{Current.user&.id} merging contact #{@mergee_contact.id} into contact #{@base_contact.id} " \
@@ -25,5 +26,15 @@ class Api::V1::Accounts::Actions::ContactMergesController < Api::V1::Accounts::B
 
   def contacts
     @contacts ||= Current.account.contacts
+  end
+
+  def authorize_contact_merge!
+    [@base_contact, @mergee_contact].each do |contact|
+      authorize contact, :merge?
+    end
+
+    conversations = Current.account.conversations.where(contact_id: [@base_contact.id, @mergee_contact.id])
+    permitted_conversations = Conversations::PermissionFilterService.new(conversations, Current.user, Current.account).perform
+    raise Pundit::NotAuthorizedError if conversations.where.not(id: permitted_conversations.select(:id)).exists?
   end
 end

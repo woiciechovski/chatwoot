@@ -2,6 +2,7 @@ class Api::V1::Accounts::Integrations::ShopifyController < Api::V1::Accounts::In
   include Shopify::IntegrationHelper
   before_action :ensure_shopify_enabled
   before_action :fetch_hook, except: [:auth, :complete_install]
+  before_action :authorize_contact_read!, only: [:orders]
   before_action -> { Shopify::ApiContext.setup!(custom_app: @hook.shopify_custom_app) }, only: [:orders]
   before_action :check_authorization, only: [:auth, :complete_install, :destroy]
   before_action :validate_contact, only: [:orders]
@@ -140,5 +141,9 @@ class Api::V1::Accounts::Integrations::ShopifyController < Api::V1::Accounts::In
 
     render json: { error: 'Contact information missing' },
            status: :unprocessable_entity
+  end
+
+  def authorize_contact_read!
+    authorize Contact, :search?
   end
 end

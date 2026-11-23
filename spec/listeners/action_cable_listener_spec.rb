@@ -223,13 +223,39 @@ describe ActionCableListener do
     let(:contact_data) { contact.push_event_data.merge(account_id: contact.account_id) }
     let!(:event) { Events::Base.new(event_name, Time.zone.now, contact_data: contact_data) }
 
-    it 'sends message to account admins, inbox agents' do
+    it 'enqueues contact data for recipient-level authorization before broadcast' do
       expect(ActionCableBroadcastJob).to receive(:perform_later).with(
-        ["account_#{account.id}"],
+        a_collection_containing_exactly(agent.pubsub_token, admin.pubsub_token),
         'contact.deleted',
-        contact_data
+        contact_data.except(:thumbnail)
       )
       listener.contact_deleted(event)
+    end
+  end
+
+  describe '#contact_updated' do
+    let(:event_name) { :'contact.updated' }
+    let!(:contact) { create(:contact, account: account) }
+    let!(:event) { Events::Base.new(event_name, Time.zone.now, contact: contact) }
+
+    it 'uses an authenticated avatar route on the contact event' do
+      contact.avatar.attach(
+        io: Rails.root.join('spec/assets/avatar.png').open,
+        filename: 'avatar.png',
+        content_type: 'image/png'
+      )
+      contact.reload
+
+      expect(ActionCableBroadcastJob).to receive(:perform_later).with(
+        a_collection_containing_exactly(agent.pubsub_token, admin.pubsub_token),
+        'contact.updated',
+        contact.push_event_data.merge(
+          thumbnail: "/api/v1/accounts/#{account.id}/contacts/#{contact.id}/avatar/download",
+          account_id: account.id
+        )
+      )
+
+      listener.contact_updated(event)
     end
   end
 

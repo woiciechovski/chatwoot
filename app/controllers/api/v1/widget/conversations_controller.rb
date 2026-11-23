@@ -24,7 +24,8 @@ class Api::V1::Widget::ConversationsController < Api::V1::Widget::BaseController
       contact: @contact,
       params: { email: contact_email, phone_number: contact_phone_number, name: contact_name, custom_attributes: contact_custom_attributes },
       retain_original_contact_name: true,
-      discard_invalid_attrs: true
+      discard_invalid_attrs: true,
+      avatar_authorization_context: contact_avatar_authorization_context(@contact)
     )
     @contact = identify_action.perform
     identify_action

@@ -3,6 +3,7 @@ FactoryBot.define do
     data_type { 'contacts' }
     import_file { Rack::Test::UploadedFile.new(Rails.root.join('spec/assets/contacts.csv'), 'text/csv') }
     account
+    initiated_by { create(:user, account: account, role: :administrator) }
 
     trait :intercom do
       data_type { 'intercom' }

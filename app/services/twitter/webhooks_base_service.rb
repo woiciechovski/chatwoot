@@ -30,6 +30,13 @@ class Twitter::WebhooksBaseService
       user['id'], user['name'], additional_contact_attributes(user)
     )
     @contact = @contact_inbox.contact
-    Avatar::AvatarFromUrlJob.perform_later(@contact, user['profile_image_url']) if user['profile_image_url']
+    return unless user['profile_image_url']
+
+    authorization = Contacts::Authorization.system_avatar_context(
+      contact: @contact,
+      inbox: @contact_inbox.inbox,
+      origin: 'twitter_webhook'
+    )
+    Avatar::AvatarFromUrlJob.perform_later(@contact, user['profile_image_url'], authorization)
   end
 end

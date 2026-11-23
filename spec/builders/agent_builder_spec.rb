@@ -22,9 +22,11 @@ RSpec.describe AgentBuilder, type: :model do
     }
   end
 
+  before { Current.reset }
+
   describe '#perform' do
-    it 'locks the account while checking and creating the agent' do
-      expect(account).to receive(:with_lock).and_call_original
+    it 'uses the membership lock coordinator while checking and creating the agent' do
+      expect(Rbac::MembershipLockService).to receive(:with_account).with(account_id: account.id).and_call_original
 
       agent_builder.perform
     end
@@ -107,7 +109,7 @@ RSpec.describe AgentBuilder, type: :model do
 
     context 'when the account has reached its agent limit' do
       before do
-        allow(account).to receive(:usage_limits).and_return({ agents: account.account_users.count })
+        allow(ChatwootApp).to receive(:max_limit).and_return(account.account_users.count)
       end
 
       it 'raises a limit exceeded error without creating a user' do

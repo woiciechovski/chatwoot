@@ -14,10 +14,12 @@ import ContactHistory from 'dashboard/components-next/Contacts/ContactsSidebar/C
 import ContactMedia from 'dashboard/components-next/Contacts/ContactsSidebar/ContactMedia.vue';
 import ContactMerge from 'dashboard/components-next/Contacts/ContactsSidebar/ContactMerge.vue';
 import ContactCustomAttributes from 'dashboard/components-next/Contacts/ContactsSidebar/ContactCustomAttributes.vue';
+import { usePolicy } from 'dashboard/composables/usePolicy';
 
 const store = useStore();
 const route = useRoute();
 const router = useRouter();
+const { checkContactPermission, checkContactPermissions } = usePolicy();
 
 const contact = useMapGetter('contacts/getContactById');
 const uiFlags = useMapGetter('contacts/getUIFlags');
@@ -47,14 +49,28 @@ const CONTACT_TABS_OPTIONS = [
 ];
 
 const tabs = computed(() => {
-  return CONTACT_TABS_OPTIONS.map(tab => ({
+  return CONTACT_TABS_OPTIONS.filter(tab =>
+    tab.value === 'merge'
+      ? checkContactPermissions([
+          'contacts.read',
+          'contacts.update',
+          'contacts.delete',
+        ])
+      : true
+  ).map(tab => ({
     label: t(`CONTACTS_LAYOUT.SIDEBAR.TABS.${tab.key}`),
     value: tab.value,
   }));
 });
 
 const activeTabIndex = computed(() => {
-  return CONTACT_TABS_OPTIONS.findIndex(v => v.value === activeTab.value);
+  return tabs.value.findIndex(tab => tab.value === activeTab.value);
+});
+
+watch(tabs, availableTabs => {
+  if (!availableTabs.some(tab => tab.value === activeTab.value)) {
+    activeTab.value = availableTabs[0]?.value || 'attributes';
+  }
 });
 
 const goToContactsList = () => {
@@ -66,12 +82,18 @@ const goToContactsList = () => {
 };
 
 const fetchActiveContact = async () => {
-  if (route.params.contactId) {
+  if (!route.params.contactId) return false;
+
+  try {
     await store.dispatch('contacts/show', { id: route.params.contactId });
     await store.dispatch(
       'contacts/fetchContactableInbox',
       route.params.contactId
     );
+    return true;
+  } catch (error) {
+    useAlert(error.data || error.message || t('CONVERSATION.MESSAGE_ERROR'));
+    return false;
   }
 };
 
@@ -122,8 +144,10 @@ const toggleContactBlock = async isBlocked => {
   }
 };
 
-const fetchContact = () => {
-  fetchActiveContact();
+const fetchContact = async () => {
+  const canReadContact = await fetchActiveContact();
+  if (!canReadContact) return;
+
   fetchContactNotes();
   fetchContactConversations();
 };
@@ -146,6 +170,7 @@ watch(contactId, fetchContact);
       is-detail-view
       :show-pagination-footer="false"
       :is-updating="isUpdatingContact"
+      :can-update="checkContactPermission('contacts.update')"
       @go-to-contacts-list="goToContactsList"
       @toggle-block="toggleContactBlock"
     >
@@ -178,16 +203,24 @@ watch(contactId, fetchContact);
         >
           <Spinner />
         </div>
-        <template v-else>
+        <template v-else-if="selectedContact">
           <ContactCustomAttributes
             v-if="activeTab === 'attributes'"
             :selected-contact="selectedContact"
+            :read-only="!checkContactPermission('contacts.update')"
           />
           <ContactNotes v-if="activeTab === 'notes'" :key="contactId" />
           <ContactHistory v-if="activeTab === 'history'" :key="contactId" />
           <ContactMedia v-if="activeTab === 'media'" :key="contactId" />
           <ContactMerge
-            v-if="activeTab === 'merge'"
+            v-if="
+              activeTab === 'merge' &&
+              checkContactPermissions([
+                'contacts.read',
+                'contacts.update',
+                'contacts.delete',
+              ])
+            "
             :key="contactId"
             ref="contactMergeRef"
             :selected-contact="selectedContact"

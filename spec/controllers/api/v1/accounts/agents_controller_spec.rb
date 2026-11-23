@@ -46,6 +46,23 @@ RSpec.describe 'Agents API', type: :request do
   describe 'DELETE /api/v1/accounts/{account.id}/agents/:id' do
     let(:other_agent) { create(:user, account: account, role: :agent) }
 
+    it 'does not remove the last administrator' do
+      delete "/api/v1/accounts/#{account.id}/agents/#{admin.id}",
+             headers: admin.create_new_auth_token,
+             as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(AccountUser.find_by!(account: account, user: admin)).to be_administrator
+      expect(RbacAuditEvent.last).to have_attributes(
+        account: account,
+        actor: AccountUser.find_by!(account: account, user: admin),
+        action: 'administrator.removal.denied',
+        target_type: 'AccountUser',
+        target_id: AccountUser.find_by!(account: account, user: admin).id,
+        result: 'denied'
+      )
+    end
+
     context 'when it is an unauthenticated user' do
       it 'returns unauthorized' do
         delete "/api/v1/accounts/#{account.id}/agents/#{other_agent.id}"
@@ -96,6 +113,24 @@ RSpec.describe 'Agents API', type: :request do
   describe 'PUT /api/v1/accounts/{account.id}/agents/:id' do
     let(:other_agent) { create(:user, account: account, role: :agent) }
 
+    it 'does not allow demoting the last administrator' do
+      put "/api/v1/accounts/#{account.id}/agents/#{admin.id}",
+          headers: admin.create_new_auth_token,
+          params: { agent: { name: 'Changed Admin', role: 'agent' } },
+          as: :json
+
+      expect(response).to have_http_status(:unprocessable_entity)
+      expect(AccountUser.find_by!(account: account, user: admin)).to be_administrator
+      expect(admin.reload.name).not_to eq('Changed Admin')
+      expect(RbacAuditEvent.last).to have_attributes(
+        account: account,
+        action: 'administrator.demotion.denied',
+        target_type: 'AccountUser',
+        target_id: AccountUser.find_by!(account: account, user: admin).id,
+        result: 'denied'
+      )
+    end
+
     context 'when it is an unauthenticated user' do
       it 'returns unauthorized' do
         put "/api/v1/accounts/#{account.id}/agents/#{other_agent.id}"
@@ -139,6 +174,32 @@ RSpec.describe 'Agents API', type: :request do
         expect(response_data['availability_status']).to eq('busy')
         expect(response_data['auto_offline']).to be(false)
         expect(other_agent.account_users.first.role).to eq('administrator')
+      end
+
+      it 'updates the name and native role in one operation' do
+        put "/api/v1/accounts/#{account.id}/agents/#{other_agent.id}",
+            params: { agent: { name: 'Named Admin', role: 'administrator' } },
+            headers: admin.create_new_auth_token,
+            as: :json
+
+        expect(response).to have_http_status(:success)
+        expect(other_agent.reload.name).to eq('Named Admin')
+        expect(AccountUser.find_by!(account: account, user: other_agent)).to be_administrator
+      end
+
+      it 'rolls back the name when the membership update fails validation' do
+        role = RbacRole.create!(account: account, name: 'Support')
+        other_agent.account_users.first.update!(rbac_role: role)
+
+        put "/api/v1/accounts/#{account.id}/agents/#{other_agent.id}",
+            params: { agent: { name: 'Should Roll Back', role: 'administrator' } },
+            headers: admin.create_new_auth_token,
+            as: :json
+
+        expect(response).to have_http_status(:unprocessable_entity)
+        expect(other_agent.reload.name).not_to eq('Should Roll Back')
+        expect(AccountUser.find_by!(account: account, user: other_agent)).to be_agent
+        expect(AccountUser.find_by!(account: account, user: other_agent).rbac_role_id).to eq(role.id)
       end
     end
   end

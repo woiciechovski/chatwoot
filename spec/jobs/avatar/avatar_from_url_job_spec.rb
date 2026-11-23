@@ -16,6 +16,51 @@ RSpec.describe Avatar::AvatarFromUrlJob do
 
   context 'with rate-limited avatarable (Contact)' do
     let(:avatarable) { create(:contact) }
+    let(:avatar_admin) { create(:user, account: avatarable.account, role: :administrator) }
+    let(:authorization) do
+      Contacts::Authorization.user_avatar_context(
+        account_user: avatarable.account.account_users.find_by!(user: avatar_admin),
+        contact: avatarable,
+        permission: 'contacts.update'
+      )
+    end
+
+    it 'rejects a Contact avatar job without an authenticated actor or trusted system origin' do
+      stub_request(:get, valid_url)
+        .to_return(
+          status: 200,
+          body: File.read(Rails.root.join('spec/assets/avatar.png')),
+          headers: { 'Content-Type' => 'image/png' }
+        )
+
+      described_class.perform_now(avatarable, valid_url)
+
+      expect(avatarable.reload.avatar).not_to be_attached
+      expect(avatarable.additional_attributes['avatar_url_hash']).to be_nil
+      expect(WebMock).not_to have_requested(:get, valid_url)
+    end
+
+    it 'rejects unknown system origins and mismatched contact identities' do
+      inbox = create(:inbox, account: avatarable.account)
+      create(:contact_inbox, contact: avatarable, inbox: inbox)
+      system_context = Contacts::Authorization.system_avatar_context(
+        contact: avatarable,
+        inbox: inbox,
+        origin: 'unknown_origin'
+      )
+      mismatched_context = system_context.merge(
+        system_origin: 'contact_identify_action',
+        principal_contact_id: avatarable.id + 1
+      )
+      stub_request(:get, valid_url)
+        .to_return(status: 200, body: File.read(Rails.root.join('spec/assets/avatar.png')), headers: { 'Content-Type' => 'image/png' })
+
+      described_class.perform_now(avatarable, valid_url, system_context)
+      described_class.perform_now(avatarable, valid_url, mismatched_context)
+
+      expect(avatarable.reload.avatar).not_to be_attached
+      expect(WebMock).not_to have_requested(:get, valid_url)
+    end
 
     it 'attaches and updates sync attributes' do
       stub_request(:get, valid_url)
@@ -25,7 +70,7 @@ RSpec.describe Avatar::AvatarFromUrlJob do
           headers: { 'Content-Type' => 'image/png' }
         )
 
-      described_class.perform_now(avatarable, valid_url)
+      described_class.perform_now(avatarable, valid_url, authorization)
       avatarable.reload
       expect(avatarable.avatar).to be_attached
       expect(avatarable.additional_attributes['avatar_url_hash']).to eq(Digest::SHA256.hexdigest(valid_url))
@@ -42,7 +87,7 @@ RSpec.describe Avatar::AvatarFromUrlJob do
           headers: { 'Content-Type' => 'image/webp' }
         )
 
-      described_class.perform_now(avatarable, webp_url)
+      described_class.perform_now(avatarable, webp_url, authorization)
       avatarable.reload
 
       expect(avatarable.avatar).to be_attached
@@ -60,7 +105,7 @@ RSpec.describe Avatar::AvatarFromUrlJob do
           headers: { 'Content-Type' => 'IMAGE/PNG; charset=binary' }
         )
 
-      described_class.perform_now(avatarable, parameterized_url)
+      described_class.perform_now(avatarable, parameterized_url, authorization)
       avatarable.reload
 
       expect(avatarable.avatar).to be_attached
@@ -79,7 +124,7 @@ RSpec.describe Avatar::AvatarFromUrlJob do
           headers: { 'Content-Type' => 'image/png' }
         )
 
-      described_class.perform_now(avatarable, authenticated_url)
+      described_class.perform_now(avatarable, authenticated_url, authorization)
       avatarable.reload
 
       expect(avatarable.avatar).to be_attached
@@ -97,7 +142,7 @@ RSpec.describe Avatar::AvatarFromUrlJob do
           headers: { 'Content-Type' => 'image/png' }
         )
 
-      described_class.perform_now(avatarable, valid_url)
+      described_class.perform_now(avatarable, valid_url, authorization)
       avatarable.reload
       expect(avatarable.avatar).not_to be_attached
       expect(avatarable.additional_attributes['last_avatar_sync_at']).to be_present
@@ -117,7 +162,7 @@ RSpec.describe Avatar::AvatarFromUrlJob do
           headers: { 'Content-Type' => 'image/png' }
         )
 
-      described_class.perform_now(avatarable, valid_url)
+      described_class.perform_now(avatarable, valid_url, authorization)
       expect(avatarable.avatar).not_to be_attached
       avatarable.reload
       expect(avatarable.additional_attributes['last_avatar_sync_at']).to be_present
@@ -127,7 +172,7 @@ RSpec.describe Avatar::AvatarFromUrlJob do
 
     it 'updates sync attributes even when URL is invalid' do
       invalid_url = 'invalid_url'
-      described_class.perform_now(avatarable, invalid_url)
+      described_class.perform_now(avatarable, invalid_url, authorization)
       avatarable.reload
       expect(avatarable.avatar).not_to be_attached
       expect(avatarable.additional_attributes['last_avatar_sync_at']).to be_present
@@ -142,7 +187,7 @@ RSpec.describe Avatar::AvatarFromUrlJob do
           headers: { 'Content-Type' => 'application/xml' }
         )
 
-      described_class.perform_now(avatarable, valid_url)
+      described_class.perform_now(avatarable, valid_url, authorization)
       avatarable.reload
 
       expect(avatarable.avatar).not_to be_attached
@@ -154,7 +199,7 @@ RSpec.describe Avatar::AvatarFromUrlJob do
       blocked_url = 'http://127.0.0.1/avatar.png'
 
       expect do
-        described_class.perform_now(avatarable, blocked_url)
+        described_class.perform_now(avatarable, blocked_url, authorization)
       end.not_to raise_error
 
       avatarable.reload
@@ -199,7 +244,12 @@ RSpec.describe Avatar::AvatarFromUrlJob do
         )
       )
 
-    expect { described_class.perform_now(contact, valid_url) }.not_to raise_error
+    authorization = Contacts::Authorization.user_avatar_context(
+      account_user: contact.account.account_users.find_by!(user: create(:user, account: contact.account, role: :administrator)),
+      contact: contact,
+      permission: 'contacts.update'
+    )
+    expect { described_class.perform_now(contact, valid_url, authorization) }.not_to raise_error
     expect(contact.reload.avatar).not_to be_attached
   ensure
     invalid_file.close!

@@ -45,11 +45,18 @@ class ContactInboxWithContactBuilder
   end
 
   def update_contact_avatar(contact)
-    ::Avatar::AvatarFromUrlJob.perform_later(contact, contact_attributes[:avatar_url]) if contact_attributes[:avatar_url]
+    return if contact_attributes[:avatar_url].blank?
+
+    authorization = Contacts::Authorization.system_avatar_context(
+      contact: contact,
+      inbox: @inbox,
+      origin: 'contact_inbox_with_contact_builder'
+    )
+    ::Avatar::AvatarFromUrlJob.perform_later(contact, contact_attributes[:avatar_url], authorization)
   end
 
   def create_contact
-    account.contacts.create!(
+    contact = account.contacts.new(
       name: contact_name,
       phone_number: contact_attributes[:phone_number],
       email: contact_attributes[:email],
@@ -57,6 +64,13 @@ class ContactInboxWithContactBuilder
       additional_attributes: contact_attributes[:additional_attributes],
       custom_attributes: contact_attributes[:custom_attributes]
     )
+    contact.avatar_authorization_context = Contacts::Authorization.system_avatar_context(
+      contact: contact,
+      inbox: @inbox,
+      origin: 'contact_inbox_with_contact_builder'
+    )
+    contact.save!
+    contact
   end
 
   def contact_name

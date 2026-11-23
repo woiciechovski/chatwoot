@@ -6,6 +6,11 @@ describe ContactIdentifyAction do
   let!(:account) { create(:account) }
   let(:custom_attributes) { { test: 'test', test1: 'test1' } }
   let!(:contact) { create(:contact, account: account, custom_attributes: custom_attributes) }
+  let(:inbox) { create(:inbox, account: account) }
+  let(:contact_inbox) { create(:contact_inbox, contact: contact, inbox: inbox) }
+  let(:avatar_authorization_context) do
+    Contacts::Authorization.system_avatar_context(contact: contact, inbox: inbox, origin: 'contact_identify_action')
+  end
   let(:params) do
     { name: 'test', identifier: 'test_id', additional_attributes: { location: 'Bengaulru', company_name: 'Meta' },
       custom_attributes: { test: 'new test', test2: 'test2' } }
@@ -38,8 +43,10 @@ describe ContactIdentifyAction do
 
     it 'enqueues avatar job when valid avatar url parameter is passed' do
       params = { name: 'test', avatar_url: 'https://chatwoot-assets.local/sample.png' }
-      expect(Avatar::AvatarFromUrlJob).to receive(:perform_later).with(contact, params[:avatar_url]).once
-      described_class.new(contact: contact, params: params).perform
+      expect(Avatar::AvatarFromUrlJob).to receive(:perform_later)
+        .with(contact, params[:avatar_url], avatar_authorization_context).once
+      contact_inbox
+      described_class.new(contact: contact, params: params, avatar_authorization_context: avatar_authorization_context).perform
     end
 
     it 'does not enqueue avatar job when invalid avatar url parameter is passed' do
@@ -212,8 +219,10 @@ describe ContactIdentifyAction do
         contact.update!(name: 'test')
         params = { name: 'test', avatar_url: 'https://chatwoot-assets.local/sample.png' }
 
-        expect(Avatar::AvatarFromUrlJob).to receive(:perform_later).with(contact, params[:avatar_url]).once
-        described_class.new(contact: contact, params: params).perform
+        expect(Avatar::AvatarFromUrlJob).to receive(:perform_later)
+          .with(contact, params[:avatar_url], avatar_authorization_context).once
+        contact_inbox
+        described_class.new(contact: contact, params: params, avatar_authorization_context: avatar_authorization_context).perform
       end
     end
   end

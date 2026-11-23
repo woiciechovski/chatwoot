@@ -692,7 +692,12 @@ RSpec.describe 'Contacts API', type: :request do
               params: valid_params.merge(avatar_url: 'http://example.com/avatar.png'),
               headers: admin.create_new_auth_token
         expect(response).to have_http_status(:success)
-        expect(Avatar::AvatarFromUrlJob).to have_been_enqueued.with(contact, 'http://example.com/avatar.png')
+        authorization = Contacts::Authorization.user_avatar_context(
+          account_user: account.account_users.find_by!(user: admin),
+          contact: contact,
+          permission: 'contacts.update'
+        )
+        expect(Avatar::AvatarFromUrlJob).to have_been_enqueued.with(contact, 'http://example.com/avatar.png', authorization)
       end
 
       it 'allows blocking of contact' do

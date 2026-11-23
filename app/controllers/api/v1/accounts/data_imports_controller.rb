@@ -105,7 +105,20 @@ class Api::V1::Accounts::DataImportsController < Api::V1::Accounts::BaseControll
   end
 
   def check_authorization
-    authorize(@data_import || DataImport)
+    authorize(data_import_policy_record)
+  end
+
+  def data_import_policy_record
+    return @data_import if @data_import.present?
+    return DataImport unless action_name.in?(%w[create validate_source])
+
+    DataImport.new(
+      account: Current.account,
+      initiated_by: Current.user,
+      data_type: permitted_params[:source_provider],
+      source_provider: permitted_params[:source_provider],
+      import_types: import_types
+    )
   end
 
   def permitted_params
